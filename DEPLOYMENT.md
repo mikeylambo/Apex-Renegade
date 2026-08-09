@@ -7,15 +7,18 @@ npm install
 npm run dev
 ```
 
-Vite listens on all interfaces, so another device on your LAN can use the network URL printed by Vite.
+For LAN testing from another device:
+
+```bash
+npm run dev:lan
+```
 
 ## GitHub -> Vercel workflow
 
-1. Push this folder to the `main` branch of the Apex Renegade GitHub repository.
-2. Import that repository into Vercel once.
-3. Keep Vercel's detected framework as **Vite**.
-4. Production branch: `main`.
-5. After that:
+1. Connect this GitHub repository to the Vercel project once.
+2. Keep Vercel's detected framework as **Vite**.
+3. Production branch: `main`.
+4. After that:
    - every push to `main` creates/updates Production;
    - branches and pull requests receive Preview Deployments.
 
@@ -28,7 +31,7 @@ These are also committed in `vercel.json`:
 - Install: `npm install`
 - Build: `npm run build`
 - Output: `dist`
-- Node: 20 (`.nvmrc`)
+- Node: 24 (`package.json` + `.nvmrc`)
 
 ## WebGPU testing
 
