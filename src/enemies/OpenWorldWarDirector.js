@@ -171,7 +171,20 @@ export class OpenWorldWarDirector {
 
   start() {
     this.active = true;
-    for (let i = 0; i < 5; i++) this._spawnFull(i % 4 === 0 ? 'enforcer' : 'hollow');
+
+    // Give the player a readable first contact in the boulevard instead of
+    // making them wait for a remote formation to walk in from the horizon.
+    // After these five, every replacement/reinforcement comes through the
+    // regional arrival network below.
+    const p = this.player.position;
+    const patrol = [
+      new THREE.Vector3(p.x - 18, 1, p.z - 58),
+      new THREE.Vector3(p.x - 8, 1, p.z - 66),
+      new THREE.Vector3(p.x + 1, 1, p.z - 61),
+      new THREE.Vector3(p.x + 10, 1, p.z - 69),
+      new THREE.Vector3(p.x + 20, 1, p.z - 57)
+    ];
+    for (let i = 0; i < patrol.length; i++) this._spawnFull(i === 0 ? 'enforcer' : 'hollow', patrol[i]);
     this._syncStage(true);
   }
 
