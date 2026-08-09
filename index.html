@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>APEX // a Renegade FPS</title>
+  <style>
+    @font-face {
+      font-family: 'Chakra Petch';
+      src: local('Chakra Petch');
+    }
+    :root {
+      --void: #07050a;
+      --abyss: #0e0812;
+      --apex-purple: #7c1fd6;
+      --apex-purple-bright: #b24bff;
+      --ember: #ff5a1f;
+      --ember-bright: #ffb347;
+      --blood: #d4145a;
+      --bone: #e8e2f0;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; width: 100%; height: 100%;
+      background: var(--void);
+      overflow: hidden;
+      font-family: 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
+      color: var(--bone);
+      user-select: none;
+    }
+    #app { position: fixed; inset: 0; }
+    canvas { display: block; outline: none; }
+
+    #boot-screen {
+      position: fixed; inset: 0; z-index: 50;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background:
+        radial-gradient(circle at 50% 30%, rgba(124,31,214,0.25), transparent 60%),
+        linear-gradient(180deg, #07050a 0%, #0e0812 100%);
+      text-align: center;
+      gap: 1.25rem;
+      cursor: pointer;
+    }
+    #boot-title {
+      font-size: clamp(3rem, 10vw, 6.5rem);
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      margin: 0;
+      color: var(--bone);
+      text-shadow: 0 0 24px var(--apex-purple-bright), 0 0 60px rgba(178,75,255,0.5);
+    }
+    #boot-sub {
+      font-size: 1rem;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--ember-bright);
+      opacity: 0.9;
+    }
+    #boot-prompt {
+      margin-top: 2rem;
+      padding: 0.85rem 2.4rem;
+      border: 1px solid rgba(232,226,240,0.35);
+      color: var(--bone);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      font-size: 0.85rem;
+      animation: pulse 1.8s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+    #hud {
+      position: fixed; inset: 0; z-index: 20;
+      pointer-events: none;
+      display: none;
+    }
+    #crosshair {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--bone);
+      box-shadow: 0 0 8px rgba(232,226,240,0.8);
+    }
+    .hud-corner {
+      position: absolute; bottom: 1.5rem;
+      display: flex; flex-direction: column; gap: 0.4rem;
+      min-width: 220px;
+    }
+    #hud-left { left: 1.5rem; }
+    #hud-right { right: 1.5rem; align-items: flex-end; }
+
+    .bar-label {
+      font-size: 0.7rem; letter-spacing: 0.25em; text-transform: uppercase;
+      color: rgba(232,226,240,0.6);
+    }
+    .bar-track {
+      width: 220px; height: 10px;
+      background: rgba(232,226,240,0.08);
+      border: 1px solid rgba(232,226,240,0.2);
+      position: relative;
+      clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+    }
+    .bar-fill { height: 100%; width: 100%; transition: width 0.15s ease-out; }
+    #health-fill { background: linear-gradient(90deg, var(--blood), #ff2d6e); }
+    #blast-fill { background: linear-gradient(90deg, var(--apex-purple), var(--apex-purple-bright)); }
+    #blast-fill.ready { background: linear-gradient(90deg, var(--ember), var(--ember-bright)); box-shadow: 0 0 12px var(--ember-bright); }
+    #ferocity-fill { background: linear-gradient(90deg, var(--ember), var(--ember-bright)); }
+    #ferocity-fill.tier1 { box-shadow: 0 0 10px var(--ember-bright); }
+    #ferocity-fill.tier2 { box-shadow: 0 0 16px var(--ember-bright), 0 0 30px var(--ember); }
+
+    #ammo-readout {
+      font-size: 2.4rem; font-weight: 800; letter-spacing: 0.05em;
+      color: var(--bone);
+      text-shadow: 0 0 10px rgba(178,75,255,0.4);
+    }
+    #weapon-name {
+      font-size: 0.75rem; letter-spacing: 0.3em; text-transform: uppercase;
+      color: var(--ember-bright);
+    }
+    #wave-readout {
+      position: absolute; top: 1.5rem; left: 50%; transform: translateX(-50%);
+      text-align: center;
+      font-size: 0.8rem; letter-spacing: 0.3em; text-transform: uppercase;
+      color: rgba(232,226,240,0.75);
+    }
+    #wave-readout b { color: var(--ember-bright); font-size: 1rem; }
+
+    #damage-vignette {
+      position: fixed; inset: 0; pointer-events: none; z-index: 15;
+      box-shadow: inset 0 0 0 0 rgba(212,20,90,0);
+      transition: box-shadow 0.1s ease-out;
+    }
+
+    #blast-banner {
+      position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%) scale(0.9);
+      font-size: clamp(2rem, 6vw, 3.5rem);
+      font-weight: 900; letter-spacing: 0.3em; text-transform: uppercase;
+      color: var(--ember-bright);
+      text-shadow: 0 0 30px var(--ember), 0 0 70px rgba(255,90,31,0.6);
+      opacity: 0; transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    #blast-banner.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+    #center-msg {
+      position: absolute; top: 42%; left: 50%; transform: translate(-50%, -50%);
+      font-size: 1.4rem; letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--bone); text-align: center; opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    #center-msg.show { opacity: 1; }
+
+    #app.feral-active { filter: grayscale(0.85) saturate(1.7) hue-rotate(300deg) contrast(1.12); }
+
+    #feral-overlay {
+      position: fixed; inset: 0; z-index: 18; pointer-events: none; opacity: 0;
+      background: radial-gradient(circle at 50% 50%, transparent 42%, rgba(212,20,90,0.4) 100%);
+      transition: opacity 0.2s ease;
+    }
+    #feral-overlay.active { opacity: 1; animation: feralPulse 0.6s ease-in-out infinite; }
+    @keyframes feralPulse { 0%, 100% { opacity: 0.65; } 50% { opacity: 1; } }
+
+    #feral-banner {
+      position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%);
+      text-align: center; opacity: 0; transition: opacity 0.2s ease;
+    }
+    #feral-banner.show { opacity: 1; }
+    #feral-banner-text {
+      font-size: 1.6rem; font-weight: 900; letter-spacing: 0.25em; text-transform: uppercase;
+      color: #ff2d6e; text-shadow: 0 0 20px rgba(255,45,110,0.8);
+    }
+    #feral-bar-track { width: 260px; margin: 0.6rem auto 0; }
+    #feral-bar-fill { background: linear-gradient(90deg, #ff2d6e, #ffb347); }
+    @keyframes feralDrain { from { width: 100%; } to { width: 0%; } }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="boot-screen">
+    <div id="boot-sub">Renegade Protocol // Vertical Slice</div>
+    <h1 id="boot-title">APEX</h1>
+    <div id="boot-prompt">Click to hunt</div>
+  </div>
+
+  <div id="hud">
+    <div id="wave-readout">Wave <b id="wave-number">1</b></div>
+    <div id="crosshair"></div>
+    <div id="blast-banner">Apex Surge</div>
+    <div id="feral-banner">
+      <div id="feral-banner-text">Claw It Back</div>
+      <div class="bar-track" id="feral-bar-track"><div id="feral-bar-fill" class="bar-fill"></div></div>
+    </div>
+    <div id="center-msg"></div>
+
+    <div class="hud-corner" id="hud-left">
+      <div class="bar-label">Vitality</div>
+      <div class="bar-track"><div id="health-fill" class="bar-fill"></div></div>
+      <div class="bar-label" style="margin-top:0.5rem;">Apex Charge</div>
+      <div class="bar-track"><div id="blast-fill" class="bar-fill"></div></div>
+      <div class="bar-label" style="margin-top:0.5rem;">Ferocity</div>
+      <div class="bar-track"><div id="ferocity-fill" class="bar-fill"></div></div>
+    </div>
+
+    <div class="hud-corner" id="hud-right">
+      <div id="weapon-name">Corona Blaster</div>
+      <div id="ammo-readout">24 / 96</div>
+    </div>
+  </div>
+
+  <div id="damage-vignette"></div>
+  <div id="feral-overlay"></div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
