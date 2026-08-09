@@ -37,9 +37,17 @@ async function boot() {
   const postfx = new PostFX(engine);
 
   bus.on('recoil', ({ pitch, yaw }) => playerCamera.addRecoil(pitch, yaw));
-  bus.on('blastModeStart', () => playerCamera.setFovPunch(102));
+  bus.on('blastModeStart', () => {
+    playerCamera.setFovPunch(102);
+    input.pulseGamepad(180, .52, .30);
+  });
   bus.on('blastModeEnd', () => playerCamera.setFovPunch(92));
-  bus.on('refusalTier', (tier) => playerCamera.setFovPunch(92 + tier * 1.6));
+  bus.on('refusalTier', (tier) => {
+    playerCamera.setFovPunch(92 + tier * 1.6);
+    input.pulseGamepad(220, .48, .36);
+  });
+  bus.on('weaponFired', () => input.pulseGamepad(42, .10, .045));
+  bus.on('playerDamaged', ({ amount }) => input.pulseGamepad(90, .18, Math.min(.42, .12 + amount * .009)));
 
   engine.setRenderFn((dt) => postfx.render(dt));
 
@@ -48,6 +56,7 @@ async function boot() {
   });
 
   engine.onUpdate((dt) => {
+    input.update();
     const mouseDelta = input.consumeMouseDelta();
     player.updateLook(mouseDelta);
     playerCamera.update(dt);
@@ -61,13 +70,12 @@ async function boot() {
     postfx.update(dt);
   });
 
-  const menu = new MenuSystem(input, engine, hud, () => {
+  new MenuSystem(input, engine, hud, () => {
     const start = levelManager.loadCurrent();
     player.teleport(start);
     engine.start();
   });
 
-  // eslint-disable-next-line no-console
   console.log('%cAPEX — Open War Sandbox / Refusal Prototype', 'color:#b24bff;font-weight:bold;');
 }
 
