@@ -5,6 +5,11 @@ import { Maw } from './weapons/Maw.js';
 import { BlastMode } from './weapons/BlastMode.js';
 import { FeralReversal } from './FeralReversal.js';
 
+/**
+ * Owns the two base weapons + the Apex Surge ultimate. Only one "kit" is
+ * active at a time — entering Apex Surge fully swaps the moveset rather
+ * than being a third weapon slot, per design (see GDD.md).
+ */
 export class WeaponSystem {
   constructor(engine, input, camera, playerController, enemyManager) {
     this.engine = engine;
@@ -13,10 +18,15 @@ export class WeaponSystem {
     this.player = playerController;
     this.enemyManager = enemyManager;
     this.raycaster = new THREE.Raycaster();
-    this.raycaster.far = 80;
-    this.weapons = { corona: new CoronaBlaster(this), maw: new Maw(this) };
+    this.raycaster.far = 320;
+
+    this.weapons = {
+      corona: new CoronaBlaster(this),
+      maw: new Maw(this)
+    };
     this.blastMode = new BlastMode(this);
     this.feralReversal = new FeralReversal(this);
+
     this.order = ['corona', 'maw'];
     this.activeKey = 'corona';
     this.active = this.weapons[this.activeKey];
@@ -31,14 +41,23 @@ export class WeaponSystem {
     this._announce();
   }
 
-  _announce() { bus.emit('weaponChanged', { name: this.active.name, ammo: this.active.ammo, reserve: this.active.reserve }); }
+  _announce() {
+    bus.emit('weaponChanged', { name: this.active.name, ammo: this.active.ammo, reserve: this.active.reserve });
+  }
 
   update(dt) {
     const input = this.input;
-    if (GameState.inFeralReversal) { this.feralReversal.update(dt); return; }
-    if (GameState.inBlastMode) this.blastMode.update(dt);
-    else {
+
+    if (GameState.inFeralReversal) {
+      this.feralReversal.update(dt);
+      return;
+    }
+
+    if (GameState.inBlastMode) {
+      this.blastMode.update(dt);
+    } else {
       this.active.update?.(dt);
+
       if (input.isDown('Digit1')) this.switchTo('corona');
       if (input.isDown('Digit2')) this.switchTo('maw');
       const wheel = input.consumeWheel();
@@ -47,9 +66,13 @@ export class WeaponSystem {
         const next = (idx + wheel + this.order.length) % this.order.length;
         this.switchTo(this.order[next]);
       }
+
       if (input.isMouseDown(0)) this.active.tryFire();
       if (input.isMouseDown(2)) this.active.tryAim?.(dt);
-      if (input.isDown('KeyF') && GameState.blastCharge >= GameState.blastChargeMax) this.enterBlastMode();
+
+      if (input.isDown('KeyF') && GameState.blastCharge >= GameState.blastChargeMax) {
+        this.enterBlastMode();
+      }
     }
   }
 
@@ -69,6 +92,7 @@ export class WeaponSystem {
     this._announce();
   }
 
+  /** Shared hitscan: enemies respect world occlusion and surfaces retain impact history. */
   hitscan({ spread = 0, damage = 10, pierceCount = 1 } = {}) {
     const dir = new THREE.Vector3();
     this.camera.getWorldDirection(dir);
@@ -80,11 +104,13 @@ export class WeaponSystem {
     }
     const origin=this.camera.getWorldPosition(new THREE.Vector3());
     this.raycaster.set(origin, dir);
+
     const targets = this.enemyManager.getHittableObjects();
     const worldTargets = this.enemyManager.getWorldHitObjects?.() || [];
     const enemyHits = this.raycaster.intersectObjects(targets, false);
     const worldHit = worldTargets.length ? this.raycaster.intersectObjects(worldTargets, false)[0] : null;
     const worldDistance = worldHit?.distance ?? Infinity;
+
     let remaining = pierceCount;
     const results = [];
     for (const hit of enemyHits) {
@@ -94,12 +120,29 @@ export class WeaponSystem {
       target.takeDamage(damage, hit.point);
       results.push({ target, point: hit.point });
       remaining -= 1;
+
+      // At higher Refusal tiers, a direct hit begins affecting the formation
+      // around it. The radius is intentionally restrained until Tier 3.
+      if (GameState.refusalTier >= 2) {
+        const radius = GameState.refusalTier >= 4 ? 5.6 : GameState.refusalTier >= 3 ? 3.7 : 2.2;
+        const splashDamage = damage * (GameState.refusalTier >= 4 ? .62 : .34);
+        for (const other of this.enemyManager.getEnemies?.() || []) {
+          if (other === target || other.dead) continue;
+          const dist = other.mesh.position.distanceTo(hit.point);
+          if (dist <= radius) other.takeDamage(splashDamage * (1 - dist / radius * .55), hit.point);
+        }
+        bus.emit('powerImpact', { point: hit.point.clone(), tier: GameState.refusalTier, radius });
+      }
     }
+
     if (worldHit && remaining > 0) {
       let normal=new THREE.Vector3(0,1,0);
       if(worldHit.face?.normal) normal.copy(worldHit.face.normal).transformDirection(worldHit.object.matrixWorld).normalize();
       bus.emit('worldHit', { point: worldHit.point.clone(), normal, object: worldHit.object });
-    } else if(results.length===0) bus.emit('shotMiss', { origin, direction: dir.clone() });
+    } else if(results.length===0) {
+      bus.emit('shotMiss', { origin, direction: dir.clone() });
+    }
     return results;
   }
+
 }

@@ -7,22 +7,76 @@ export class MenuSystem {
     this.hud = hud;
     this.onStart = onStart;
     this.bootScreen = document.getElementById('boot-screen');
+    this.bootPrompt = document.getElementById('boot-prompt');
     this.started = false;
-    this.bootScreen.addEventListener('click', () => this._start());
+    this.starting = false;
+
+    const start = (event) => {
+      event?.preventDefault?.();
+      this._start();
+    };
+    this.bootScreen.addEventListener('pointerdown', start, { passive: false });
+    this.bootScreen.addEventListener('keydown', (event) => {
+      if (event.code === 'Enter' || event.code === 'Space') start(event);
+    });
+    this.bootScreen.tabIndex = 0;
+    this.bootScreen.setAttribute('role', 'button');
+    this.bootScreen.setAttribute('aria-label', 'Start Apex Renegade');
+
     this.input.onLockChange = (locked) => {
       if (!locked && this.started) this._showPause();
       else if (locked) this._hidePause();
     };
+
     bus.on('playerDied', () => this._showGameOver());
+    this._setPrompt('Ready // click to enter the war');
+  }
+
+  _setPrompt(text) {
+    if (this.bootPrompt) this.bootPrompt.textContent = text;
+  }
+
+  _requestLockFailSoft() {
+    try {
+      const maybePromise = this.input.requestLock();
+      maybePromise?.catch?.((err) => console.warn('[Apex] Pointer lock unavailable; game remains playable.', err));
+    } catch (err) {
+      console.warn('[Apex] Pointer lock request failed; game remains running.', err);
+    }
   }
 
   _start() {
-    if (this.started) { this.input.requestLock(); return; }
-    this.started = true;
-    this.bootScreen.style.display = 'none';
-    this.hud.show();
-    this.input.requestLock();
-    this.onStart();
+    if (this.started) {
+      this._requestLockFailSoft();
+      return;
+    }
+    if (this.starting) return;
+
+    this.starting = true;
+    this._setPrompt('Mobilizing region…');
+
+    try {
+      // Start the game before requesting pointer lock. Pointer-lock policies vary
+      // by browser, but refusal of the lock must never block simulation startup.
+      this.onStart();
+      this.started = true;
+      this.hud.show();
+      this.bootScreen.style.display = 'none';
+      this._requestLockFailSoft();
+      console.info('[Apex] Open War Sandbox started.');
+    } catch (err) {
+      this.started = false;
+      console.error('[Apex] Start failed:', err);
+      this._setPrompt('Start failed // open console');
+      const detail = document.createElement('div');
+      detail.id = 'start-error';
+      detail.style.cssText = 'max-width:720px;padding:0 2rem;color:#ff6d91;font-size:.8rem;letter-spacing:.08em;text-transform:none;white-space:pre-wrap;';
+      detail.textContent = err?.stack || err?.message || String(err);
+      this.bootScreen.querySelector('#start-error')?.remove();
+      this.bootScreen.appendChild(detail);
+    } finally {
+      this.starting = false;
+    }
   }
 
   _showPause() {
@@ -35,13 +89,16 @@ export class MenuSystem {
       background: 'rgba(7,5,10,0.75)', cursor: 'pointer', color: '#e8e2f0',
       fontFamily: 'inherit', letterSpacing: '0.25em', textTransform: 'uppercase'
     });
-    el.innerHTML = `<div style="font-size:2rem;font-weight:800;">Paused</div><div style="font-size:0.85rem;opacity:0.7;">Click to resume</div>`;
-    el.addEventListener('click', () => this.input.requestLock());
+    el.innerHTML = `<div style="font-size:2rem;font-weight:800;">Paused</div>
+      <div style="font-size:0.85rem;opacity:0.7;">Click to resume</div>`;
+    el.addEventListener('pointerdown', () => this._requestLockFailSoft());
     document.body.appendChild(el);
     this._pauseEl = el;
   }
 
-  _hidePause() { if (this._pauseEl) this._pauseEl.style.display = 'none'; }
+  _hidePause() {
+    if (this._pauseEl) this._pauseEl.style.display = 'none';
+  }
 
   _showGameOver() {
     this.engine.stop();
@@ -53,7 +110,11 @@ export class MenuSystem {
       background: 'radial-gradient(circle at 50% 40%, rgba(212,20,90,0.25), #07050a 70%)',
       color: '#e8e2f0', fontFamily: 'inherit', textAlign: 'center'
     });
-    el.innerHTML = `<div style="font-size:3.5rem;font-weight:900;letter-spacing:0.15em;color:#ff2d6e;">GROUNDED</div><div style="letter-spacing:0.3em;text-transform:uppercase;opacity:0.75;">Even apex predators bleed</div><div style="margin-top:1.5rem;padding:0.85rem 2.2rem;border:1px solid rgba(232,226,240,0.35);letter-spacing:0.2em;text-transform:uppercase;cursor:pointer;" id="retry-btn">Retry</div>`;
+    el.innerHTML = `
+      <div style="font-size:3.5rem;font-weight:900;letter-spacing:0.15em;color:#ff2d6e;">GROUNDED</div>
+      <div style="letter-spacing:0.3em;text-transform:uppercase;opacity:0.75;">The world finally bought itself a moment</div>
+      <div style="margin-top:1.5rem;padding:0.85rem 2.2rem;border:1px solid rgba(232,226,240,0.35);letter-spacing:0.2em;text-transform:uppercase;cursor:pointer;" id="retry-btn">Refuse again</div>
+    `;
     document.body.appendChild(el);
     el.querySelector('#retry-btn').addEventListener('click', () => window.location.reload());
   }
