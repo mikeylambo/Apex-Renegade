@@ -16,7 +16,8 @@
     #boot-title{font-size:clamp(3rem,10vw,6.5rem);font-weight:900;letter-spacing:.12em;margin:0;color:var(--bone);text-shadow:0 0 24px rgba(163,140,255,.62)}
     #boot-sub{font-size:.9rem;letter-spacing:.32em;text-transform:uppercase;color:var(--steel)}
     #boot-prompt{margin-top:1.6rem;padding:.85rem 2.4rem;border:1px solid rgba(232,237,244,.34);letter-spacing:.2em;text-transform:uppercase;font-size:.85rem;animation:pulse 1.8s ease-in-out infinite}
-    #boot-controls{margin-top:.5rem;font-size:.72rem;letter-spacing:.14em;color:rgba(232,237,244,.58);max-width:620px;line-height:1.65;text-transform:uppercase}
+    #boot-controls{margin-top:.5rem;font-size:.7rem;letter-spacing:.12em;color:rgba(232,237,244,.58);max-width:760px;line-height:1.72;text-transform:uppercase}
+    #boot-controls .pad{color:rgba(163,140,255,.88)}
     @keyframes pulse{0%,100%{opacity:.55}50%{opacity:1}}
     #hud{position:fixed;inset:0;z-index:20;pointer-events:none;display:none}
     #crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:5px;height:5px;border-radius:50%;background:var(--bone);box-shadow:0 0 8px rgba(232,237,244,.65)}
@@ -53,8 +54,11 @@
   <div id="boot-screen">
     <div id="boot-sub">Open War Sandbox // Refusal Prototype</div>
     <h1 id="boot-title">APEX</h1>
-    <div id="boot-prompt">Click to enter The Scar</div>
-    <div id="boot-controls">WASD MOVE · SHIFT SPRINT · Q DASH · SPACE JUMP · CTRL/C SLIDE · 1/2 WEAPONS · F APEX SURGE · REFUSAL III UNLOCKS FLIGHT · E TOGGLE FLIGHT · SPACE/CTRL ASCEND/DESCEND</div>
+    <div id="boot-prompt">Click or press a controller button to enter The Scar</div>
+    <div id="boot-controls">
+      WASD MOVE · SHIFT SPRINT · Q DASH · SPACE JUMP · CTRL/C SLIDE · 1/2 WEAPONS · F APEX SURGE · E FLIGHT AT REFUSAL III<br/>
+      <span class="pad">USB PAD: LS MOVE · RS LOOK · RT FIRE · LT AIM · A/CROSS JUMP · B/CIRCLE SLIDE · X/SQUARE RELOAD · Y/TRIANGLE WEAPON · LB DASH · RB APEX SURGE · L3 SPRINT · D-PAD ↑ FLIGHT · A/B ASCEND/DESCEND</span>
+    </div>
   </div>
 
   <div id="hud">
