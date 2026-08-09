@@ -19,6 +19,10 @@ For LAN testing from another device:
 npm run dev:lan
 ```
 
+## USB controller support
+
+Standard browser Gamepad API controllers are supported alongside keyboard/mouse. The default Xbox/PlayStation-style mapping is documented in [`CONTROLLER_NOTES.md`](./CONTROLLER_NOTES.md). A controller can start the game directly from the title screen without requiring pointer lock.
+
 ## Production build
 
 ```bash
