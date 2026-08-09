@@ -1,8 +1,10 @@
 # Apex Renegade
 
-A fast, spectral character-action FPS built with Three.js, WebGPU/TSL, Vite, and Rapier.
+A fast, spectral open-world character-action FPS built with Three.js, WebGPU/TSL, Vite, and Rapier.
 
-Current baseline: **Pass V — Shipped Feel**.
+Current baseline: **Pass VI — Open War Sandbox / Refusal Prototype**.
+
+The current prototype tests the new core thesis: overwhelming opposition is not the failure state — it is the progression system. Regional Pressure escalates visible enemy mobilization while Refusal adapts the Renegade into increasingly superhuman movement and firepower.
 
 ## Quick start
 
