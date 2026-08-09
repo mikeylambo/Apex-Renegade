@@ -1,13 +1,19 @@
 import { bus } from '../core/GameState.js';
 
+const TIER_NAMES = ['BASELINE', 'ENGAGED', 'ASCENDANT', 'AIRBORNE', 'CATASTROPHIC'];
+
 export class HUD {
   constructor() {
     this.el = document.getElementById('hud');
     this.healthFill = document.getElementById('health-fill');
     this.blastFill = document.getElementById('blast-fill');
+    this.refusalFill = document.getElementById('refusal-fill');
+    this.refusalTier = document.getElementById('refusal-tier');
+    this.pressureFill = document.getElementById('pressure-fill');
+    this.pressureStage = document.getElementById('pressure-stage');
+    this.contacts = document.getElementById('contacts-readout');
     this.ammoReadout = document.getElementById('ammo-readout');
     this.weaponName = document.getElementById('weapon-name');
-    this.waveNumber = document.getElementById('wave-number');
     this.blastBanner = document.getElementById('blast-banner');
     this.vignette = document.getElementById('damage-vignette');
     this.centerMsg = document.getElementById('center-msg');
@@ -15,7 +21,6 @@ export class HUD {
     this.feralOverlay = document.getElementById('feral-overlay');
     this.feralBanner = document.getElementById('feral-banner');
     this.feralBarFill = document.getElementById('feral-bar-fill');
-    this.ferocityFill = document.getElementById('ferocity-fill');
 
     bus.on('playerHealth', (pct) => { this.healthFill.style.width = `${pct * 100}%`; });
     bus.on('blastCharge', (pct) => {
@@ -24,24 +29,40 @@ export class HUD {
     });
     bus.on('weaponChanged', (w) => this._syncWeapon(w));
     bus.on('weaponFired', (w) => this._syncWeapon(w));
-    bus.on('reloadStart', ({ name }) => { this.weaponName.textContent = `${name} — reloading`; });
-    bus.on('ferocity', (pct) => { this.ferocityFill.style.width = `${pct * 100}%`; });
-    bus.on('ferocityTier', (tier) => {
-      this.ferocityFill.classList.toggle('tier1', tier >= 1);
-      this.ferocityFill.classList.toggle('tier2', tier >= 2);
-      if (tier === 2) this._flashCenter('Ferocious', 900);
+    bus.on('reloadStart', ({ name }) => { this.weaponName.textContent = `${name} — RELOADING`; });
+
+    bus.on('refusal', ({ pct, tier }) => {
+      this.refusalFill.style.width = `${pct * 100}%`;
+      this.refusalTier.textContent = `T${tier} // ${TIER_NAMES[tier] || 'UNKNOWN'}`;
     });
-    bus.on('waveStart', (n) => { this.waveNumber.textContent = n; });
-    bus.on('bossSpawn', (name) => this._flashCenter(`${name} awakens`, 2200));
-    bus.on('bossDefeated', (name) => this._flashCenter(`${name} destroyed`, 2200));
+    bus.on('refusalTier', (tier) => {
+      this.refusalTier.textContent = `T${tier} // ${TIER_NAMES[tier] || 'UNKNOWN'}`;
+      this.refusalFill.classList.toggle('breakthrough', tier >= 2);
+      if (tier === 3) this._flashCenter('REFUSAL III // FLIGHT ONLINE — E TO TOGGLE', 3600);
+      else this._flashCenter(`REFUSAL ${tier} // ${TIER_NAMES[tier]}`, 2200);
+    });
+    bus.on('refusalBreakthrough', ({ tier }) => {
+      if (tier > 0) this._pulseRefusal();
+    });
+
+    bus.on('pressure', ({ pct, stageName }) => {
+      this.pressureFill.style.width = `${pct * 100}%`;
+      this.pressureStage.textContent = stageName;
+      this.pressureFill.classList.toggle('total', pct >= .8);
+    });
+    bus.on('contacts', (count) => { this.contacts.textContent = `${count.toLocaleString()} CONTACTS`; });
+    bus.on('mobilization', ({ name }) => this._flashCenter(name, 1800));
+    bus.on('reinforcementsInbound', ({ count }) => {
+      if (count >= 3) this._flashCenter(`REINFORCEMENTS // +${count}`, 950);
+    });
+
     bus.on('blastModeStart', () => this._showBanner(true));
     bus.on('blastModeEnd', () => this._showBanner(false));
     bus.on('feralReversalStart', (duration) => this._startFeral(duration));
     bus.on('feralReversalSuccess', () => this._endFeral());
     bus.on('feralReversalFail', () => this._endFeral());
-    bus.on('ruptureSealed', () => this._flashCenter('Tear sealed', 1400));
     bus.on('enemyAttack', () => this._pulseDamage());
-    bus.on('areaLoaded', ({ name }) => this._flashCenter(name, 2500));
+    bus.on('areaLoaded', ({ name }) => this._flashCenter(name, 2800));
   }
 
   _syncWeapon(w) {
@@ -76,7 +97,15 @@ export class HUD {
   _pulseDamage() {
     this.vignette.style.boxShadow = 'inset 0 0 180px 40px rgba(212,20,90,0.55)';
     clearTimeout(this._vignetteTimer);
-    this._vignetteTimer = setTimeout(() => { this.vignette.style.boxShadow = 'inset 0 0 0 0 rgba(212,20,90,0)'; }, 220);
+    this._vignetteTimer = setTimeout(() => {
+      this.vignette.style.boxShadow = 'inset 0 0 0 0 rgba(212,20,90,0)';
+    }, 220);
+  }
+
+  _pulseRefusal() {
+    this.refusalFill.style.filter = 'brightness(2.2)';
+    clearTimeout(this._refusalTimer);
+    this._refusalTimer = setTimeout(() => { this.refusalFill.style.filter = ''; }, 420);
   }
 
   show() { this.el.style.display = 'block'; }
