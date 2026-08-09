@@ -13,7 +13,7 @@ export class MenuSystem {
 
     const start = (event) => {
       event?.preventDefault?.();
-      this._start();
+      this._start(false);
     };
     this.bootScreen.addEventListener('pointerdown', start, { passive: false });
     this.bootScreen.addEventListener('keydown', (event) => {
@@ -23,13 +23,28 @@ export class MenuSystem {
     this.bootScreen.setAttribute('role', 'button');
     this.bootScreen.setAttribute('aria-label', 'Start Apex Renegade');
 
+    // A controller can start the game without pointer lock. This matters on
+    // browsers that reject pointer-lock requests until a mouse/pointer gesture.
+    this.input.onGamepadActivity = () => {
+      if (!this.started) this._start(true);
+      else this._hidePause();
+    };
+
+    this.input.onGamepadChange = ({ connected }) => {
+      if (!this.started && connected) this._setPrompt('Controller detected // press any button');
+    };
+
     this.input.onLockChange = (locked) => {
-      if (!locked && this.started) this._showPause();
-      else if (locked) this._hidePause();
+      // Losing pointer lock is only a pause condition for mouse/keyboard play.
+      // A connected controller remains fully playable without pointer lock.
+      if (!locked && this.started && !this.input.hasGamepad()) this._showPause();
+      else if (locked || this.input.hasGamepad()) this._hidePause();
     };
 
     bus.on('playerDied', () => this._showGameOver());
-    this._setPrompt('Ready // click to enter the war');
+    this._setPrompt(this.input.hasGamepad()
+      ? 'Controller detected // press any button'
+      : 'Ready // click to enter the war');
   }
 
   _setPrompt(text) {
@@ -45,9 +60,10 @@ export class MenuSystem {
     }
   }
 
-  _start() {
+  _start(fromGamepad = false) {
     if (this.started) {
-      this._requestLockFailSoft();
+      if (fromGamepad) this._hidePause();
+      else this._requestLockFailSoft();
       return;
     }
     if (this.starting) return;
@@ -56,14 +72,12 @@ export class MenuSystem {
     this._setPrompt('Mobilizing region…');
 
     try {
-      // Start the game before requesting pointer lock. Pointer-lock policies vary
-      // by browser, but refusal of the lock must never block simulation startup.
       this.onStart();
       this.started = true;
       this.hud.show();
       this.bootScreen.style.display = 'none';
-      this._requestLockFailSoft();
-      console.info('[Apex] Open War Sandbox started.');
+      if (!fromGamepad) this._requestLockFailSoft();
+      console.info(`[Apex] Open War Sandbox started via ${fromGamepad ? 'controller' : 'pointer/keyboard'}.`);
     } catch (err) {
       this.started = false;
       console.error('[Apex] Start failed:', err);
@@ -80,6 +94,7 @@ export class MenuSystem {
   }
 
   _showPause() {
+    if (this.input.hasGamepad()) return;
     if (this._pauseEl) { this._pauseEl.style.display = 'flex'; return; }
     const el = document.createElement('div');
     el.id = 'pause-overlay';
