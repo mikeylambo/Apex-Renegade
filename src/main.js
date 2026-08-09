@@ -4,7 +4,7 @@ import { bus, GameState } from './core/GameState.js';
 import { PlayerController } from './player/PlayerController.js';
 import { PlayerCamera } from './player/PlayerCamera.js';
 import { WeaponSystem } from './player/WeaponSystem.js';
-import { FerocitySystem } from './player/FerocitySystem.js';
+import { RefusalSystem } from './player/RefusalSystem.js';
 import { LevelManager } from './world/LevelManager.js';
 import { HUD } from './ui/HUD.js';
 import { MenuSystem } from './ui/MenuSystem.js';
@@ -33,12 +33,13 @@ async function boot() {
   const weaponViewmodel = new WeaponViewmodel(engine, engine.camera, viewmodelMaterials);
   const levelManager = new LevelManager(engine, player);
   const weaponSystem = new WeaponSystem(engine, input, engine.camera, player, levelManager);
-  const ferocitySystem = new FerocitySystem(player);
+  const refusalSystem = new RefusalSystem(player);
   const postfx = new PostFX(engine);
 
   bus.on('recoil', ({ pitch, yaw }) => playerCamera.addRecoil(pitch, yaw));
   bus.on('blastModeStart', () => playerCamera.setFovPunch(102));
   bus.on('blastModeEnd', () => playerCamera.setFovPunch(92));
+  bus.on('refusalTier', (tier) => playerCamera.setFovPunch(92 + tier * 1.6));
 
   engine.setRenderFn((dt) => postfx.render(dt));
 
@@ -51,7 +52,7 @@ async function boot() {
     player.updateLook(mouseDelta);
     playerCamera.update(dt);
     weaponSystem.update(dt);
-    ferocitySystem.update(dt);
+    refusalSystem.update(dt);
     levelManager.update(dt);
     particles.update(dt);
     impactDecals.update(dt);
@@ -67,7 +68,7 @@ async function boot() {
   });
 
   // eslint-disable-next-line no-console
-  console.log('%cAPEX — Renegade Protocol vertical slice', 'color:#b24bff;font-weight:bold;');
+  console.log('%cAPEX — Open War Sandbox / Refusal Prototype', 'color:#b24bff;font-weight:bold;');
 }
 
 boot().catch((err) => {
