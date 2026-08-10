@@ -1,36 +1,30 @@
 import * as THREE from 'three/webgpu';
 import { GameState } from '../core/GameState.js';
 
-// --- Tunables -------------------------------------------------------------
 const CFG = {
   radius: 0.35,
   standHeight: 1.7,
   crouchHeight: 1.0,
-  eyeOffset: 0.15, // below capsule top
-
+  eyeOffset: 0.15,
   groundAccel: 14,
-  airAccel: 45,       // deliberately high: this is what makes air-strafing/bhop feel good
-  maxAirWishSpeed: 1.6, // caps per-tick air speed *gain*, not top speed — enables bhop skill ceiling
+  airAccel: 45,
+  maxAirWishSpeed: 1.6,
   groundFriction: 8,
   walkSpeed: 6.2,
   sprintSpeed: 9.5,
   crouchSpeed: 3.2,
-
   jumpSpeed: 8.2,
   gravity: 24,
-
   dashSpeed: 20,
   dashDuration: 0.16,
   dashCooldown: 0.9,
-
   wallCheckDist: 0.65,
   wallRunMinSpeed: 4,
-  wallRunGravity: 4,       // reduced gravity while attached
+  wallRunGravity: 4,
   wallRunMaxTime: 1.4,
   wallJumpUpSpeed: 7.5,
   wallJumpAwaySpeed: 8,
   wallRunCooldown: 0.35,
-
   slideMinSpeed: 6,
   slideBoost: 3,
   slideFriction: 1.4,
@@ -48,6 +42,7 @@ export class PlayerController {
     this.crouching = false;
     this.sliding = false;
     this.slideTimer = 0;
+    this.vehicleMounted = false;
 
     this.dashTimer = 0;
     this.dashCooldownTimer = 0;
@@ -63,7 +58,6 @@ export class PlayerController {
     this.yaw = 0;
     this.pitch = 0;
 
-    // Kinematic capsule body — we drive it manually and let Rapier resolve collisions.
     const bodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(0, 3, 0);
     this.body = engine.world.createRigidBody(bodyDesc);
     const colliderDesc = RAPIER.ColliderDesc.capsule(
@@ -86,12 +80,22 @@ export class PlayerController {
     this.velocity.set(0, 0, 0);
   }
 
+  setVehicleMounted(mounted) {
+    this.vehicleMounted = mounted;
+    if (mounted) {
+      this.flightMode = false;
+      this.onWall = false;
+      this.sliding = false;
+      this.crouching = false;
+      this.currentHeight = CFG.standHeight;
+    }
+  }
+
   get position() {
     const t = this.body.translation();
     return new THREE.Vector3(t.x, t.y, t.z);
   }
 
-  /** Mouse look — called every render frame (not fixed) for zero input latency. */
   updateLook(mouseDelta, sensitivity = 0.0022) {
     this.yaw -= mouseDelta.x * sensitivity;
     this.pitch -= mouseDelta.y * sensitivity;
@@ -101,12 +105,14 @@ export class PlayerController {
   get forward() {
     return new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).negate();
   }
+
   get right() {
     return new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
   }
 
-  /** Physics-rate update. dt is fixed (1/60). */
   fixedUpdate(dt) {
+    if (this.vehicleMounted) return;
+
     const input = this.input;
     const wishDir = new THREE.Vector3();
     if (input.isDown('KeyW')) wishDir.add(this.forward);
@@ -134,9 +140,7 @@ export class PlayerController {
       this._tryWallRun(input, dt);
     }
 
-    if (!this.flightMode && !this.grounded && !this.onWall && this.dashTimer <= 0) {
-      this.velocity.y -= CFG.gravity * dt;
-    }
+    if (!this.flightMode && !this.grounded && !this.onWall && this.dashTimer <= 0) this.velocity.y -= CFG.gravity * dt;
 
     if (!this.flightMode && this.grounded && input.isDown('Space') && this.dashTimer <= 0) {
       this.velocity.y = CFG.jumpSpeed * (1 + GameState.refusalTier * .08);
@@ -147,6 +151,13 @@ export class PlayerController {
     this._tickTimers(dt);
   }
 
+  moveByVehicle(velocity, dt) {
+    this.velocity.copy(velocity);
+    this.onWall = false;
+    this.sliding = false;
+    this.flightMode = false;
+    this._move(dt);
+  }
 
   _updateFlightToggle(input) {
     const pressed = input.isDown('KeyE');
@@ -173,28 +184,19 @@ export class PlayerController {
   _groundMove(wishDir, input, dt) {
     this.velocity.y = 0;
     let targetSpeed = CFG.walkSpeed;
-    if (this.sliding) {
-      // sliding preserves momentum, friction handled separately below
-      targetSpeed = this.velocity.length();
-    } else if (this.crouching) {
-      targetSpeed = CFG.crouchSpeed;
-    } else if (input.isDown('ShiftLeft')) {
-      targetSpeed = CFG.sprintSpeed;
-    }
+    if (this.sliding) targetSpeed = this.velocity.length();
+    else if (this.crouching) targetSpeed = CFG.crouchSpeed;
+    else if (input.isDown('ShiftLeft')) targetSpeed = CFG.sprintSpeed;
     if (GameState.inBlastMode) targetSpeed *= 1.45;
     targetSpeed *= 1 + GameState.refusalTier * .105;
 
     if (!this.sliding) {
       accelerate(this.velocity, wishDir, targetSpeed, CFG.groundAccel, dt);
       applyFriction(this.velocity, CFG.groundFriction, dt);
-    } else {
-      applyFriction(this.velocity, CFG.slideFriction, dt);
-    }
+    } else applyFriction(this.velocity, CFG.slideFriction, dt);
   }
 
   _airMove(wishDir, dt) {
-    // Classic Quake air-accelerate: capped per-tick gain along wish direction,
-    // which is what makes strafe-jumping (bhop) a real skill expression here.
     const airAccelMult = 1 + GameState.refusalTier * .16;
     accelerate(this.velocity, wishDir, CFG.maxAirWishSpeed * 30, CFG.airAccel * airAccelMult, dt);
   }
@@ -204,10 +206,7 @@ export class PlayerController {
     const sprinting = input.isDown('ShiftLeft');
     const speed = this.velocity.length();
 
-    if (
-      wantsCrouch && this.grounded && !this.sliding &&
-      sprinting && speed > CFG.slideMinSpeed
-    ) {
+    if (wantsCrouch && this.grounded && !this.sliding && sprinting && speed > CFG.slideMinSpeed) {
       this.sliding = true;
       this.slideTimer = 0;
       this.velocity.addScaledVector(this.velocity.clone().normalize(), CFG.slideBoost);
@@ -216,9 +215,7 @@ export class PlayerController {
     if (this.sliding) {
       this.slideTimer += dt;
       const speedNow = this.velocity.length();
-      if (!wantsCrouch || (this.slideTimer > CFG.slideMinDuration && speedNow < CFG.crouchSpeed)) {
-        this.sliding = false;
-      }
+      if (!wantsCrouch || (this.slideTimer > CFG.slideMinDuration && speedNow < CFG.crouchSpeed)) this.sliding = false;
     }
 
     this.crouching = wantsCrouch;
@@ -265,7 +262,6 @@ export class PlayerController {
   _updateWallRun(input, dt) {
     this.wallRunTimer += dt;
     const wishDir = this.forward.clone();
-    // project onto wall plane so we run along it, not into it
     wishDir.sub(this.wallNormal.clone().multiplyScalar(wishDir.dot(this.wallNormal)));
     if (wishDir.lengthSq() > 0.0001) wishDir.normalize();
 
@@ -287,16 +283,10 @@ export class PlayerController {
 
   _move(dt) {
     const desired = this.velocity.clone().multiplyScalar(dt);
-    this.characterController.computeColliderMovement(this.collider, {
-      x: desired.x, y: desired.y, z: desired.z
-    });
+    this.characterController.computeColliderMovement(this.collider, { x: desired.x, y: desired.y, z: desired.z });
     const corrected = this.characterController.computedMovement();
     const t = this.body.translation();
-    this.body.setNextKinematicTranslation({
-      x: t.x + corrected.x,
-      y: t.y + corrected.y,
-      z: t.z + corrected.z
-    });
+    this.body.setNextKinematicTranslation({ x: t.x + corrected.x, y: t.y + corrected.y, z: t.z + corrected.z });
     this.grounded = this.characterController.computedGrounded();
     if (this.grounded && this.velocity.y < 0) this.velocity.y = 0;
   }
@@ -307,15 +297,12 @@ export class PlayerController {
     if (this.wallRunCooldownTimer > 0) this.wallRunCooldownTimer -= dt;
   }
 
-  /** World-space eye position for the camera, called every render frame. */
-  getEyePosition(alpha) {
+  getEyePosition() {
     const p = this.position;
-    const bobless = new THREE.Vector3(p.x, p.y + this.currentHeight - CFG.eyeOffset, p.z);
-    return bobless;
+    return new THREE.Vector3(p.x, p.y + this.currentHeight - CFG.eyeOffset, p.z);
   }
 }
 
-// --- Quake-style movement helpers -----------------------------------------
 function accelerate(velocity, wishDir, wishSpeed, accel, dt) {
   const currentSpeed = velocity.dot(wishDir);
   const addSpeed = wishSpeed - currentSpeed;
