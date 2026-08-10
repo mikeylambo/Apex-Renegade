@@ -3,7 +3,7 @@ import { InputManager } from './core/InputManager.js';
 import { bus } from './core/GameState.js';
 import { PlayerController } from './player/PlayerController.js';
 import { PlayerCamera } from './player/PlayerCamera.js';
-import { PlayerMovementTuning, installPlayerMovementTuning } from './player/PlayerMovementTuning.js';
+import { installPlayerMovementTuning } from './player/PlayerMovementTuning.js';
 import { WeaponSystem } from './player/WeaponSystem.js';
 import { RefusalSystem } from './player/RefusalSystem.js';
 import { RenegadeBike } from './player/RenegadeBike.js';
