@@ -14,6 +14,7 @@ import { Particles } from './fx/Particles.js';
 import { ImpactDecals } from './fx/ImpactDecals.js';
 import { WorldAtmosphere } from './fx/WorldAtmosphere.js';
 import { WeaponViewmodel } from './player/WeaponViewmodel.js';
+import { ShooterReleaseFoundation } from './game/ShooterReleaseFoundation.js';
 import { createProceduralMaterials } from './world/ProceduralMaterials.js';
 
 async function boot() {
@@ -57,6 +58,8 @@ async function boot() {
 
   engine.setRenderFn((dt) => postfx.render(dt));
 
+  let releaseFoundation = null;
+
   engine.onFixedUpdate((fixedDt) => {
     bike.fixedUpdate(fixedDt);
     if (player.vehicleMounted) player.yaw = bike.heading;
@@ -80,15 +83,30 @@ async function boot() {
     weaponViewmodel.update(dt, player);
     hud.update(dt, player, input);
     postfx.update(dt);
+    releaseFoundation?.update(dt);
   });
 
   new MenuSystem(input, engine, hud, () => {
     const start = levelManager.loadCurrent();
     player.teleport(start);
+    releaseFoundation?.start();
     engine.start();
   });
 
-  console.log('%cAPEX — World Spine v0.1 / Shooter Foundation v0.2', 'color:#9c8cff;font-weight:bold;');
+  releaseFoundation = new ShooterReleaseFoundation({
+    engine,
+    input,
+    hud,
+    player,
+    playerCamera,
+    weaponSystem,
+    weaponViewmodel,
+    levelManager,
+    postfx,
+    bike
+  });
+
+  console.log('%cAPEX — World Spine v0.1 / Shooter Release Foundation v0.3', 'color:#9c8cff;font-weight:bold;');
 }
 
 boot().catch((err) => {
