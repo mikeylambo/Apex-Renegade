@@ -2,9 +2,10 @@
  * Centralized keyboard / mouse / USB controller input.
  *
  * Standard Gamepad mapping (Xbox labels / PlayStation equivalents):
- *   LS move, RS look, RT fire, LT aim, A/Cross jump/ascend,
- *   B/Circle crouch-slide/descend, X/Square reload, Y/Triangle weapon cycle,
- *   LB dash, RB Apex Surge, L3 sprint, D-pad Up flight toggle,
+ *   LS move/steer, RS look, RT fire / bike throttle, LT aim / bike brake,
+ *   A/Cross jump / bike boost, B/Circle crouch-slide, X/Square reload,
+ *   Y/Triangle weapon cycle, LB dash / bike drift, RB Apex Surge,
+ *   L3 sprint, D-pad Up flight toggle, D-pad Down mount/dismount,
  *   D-pad Left/Right weapon cycle.
  */
 export class InputManager {
@@ -118,6 +119,11 @@ export class InputManager {
     return this.gamepad?.axes?.[index] ?? 0;
   }
 
+  _buttonValue(index) {
+    this._pollGamepad(false);
+    return this.gamepad?.buttons?.[index]?.value ?? 0;
+  }
+
   _deadzone(value, zone = .12) {
     const a = Math.abs(value);
     if (a <= zone) return 0;
@@ -133,6 +139,18 @@ export class InputManager {
     const x = this._deadzone(this._axis(0), .14);
     const y = this._deadzone(this._axis(1), .14);
     return { x, y };
+  }
+
+  getVehicleAxes() {
+    const move = this.getMoveAxes();
+    const keyboardThrottle = this.keys.has('KeyW') ? 1 : 0;
+    const keyboardBrake = this.keys.has('KeyS') ? 1 : 0;
+    const keyboardSteer = (this.keys.has('KeyD') ? 1 : 0) - (this.keys.has('KeyA') ? 1 : 0);
+    return {
+      steer: Math.abs(keyboardSteer) > .01 ? keyboardSteer : move.x,
+      throttle: Math.max(keyboardThrottle, this._buttonValue(7)),
+      brake: Math.max(keyboardBrake, this._buttonValue(6))
+    };
   }
 
   isDown(code) {
@@ -154,6 +172,7 @@ export class InputManager {
       case 'KeyF': return b(5);                  // RB / R1
       case 'ShiftLeft': return b(10);             // L3
       case 'KeyE': return b(12);                  // D-pad Up
+      case 'KeyV': return b(13);                  // D-pad Down
       default: return false;
     }
   }
@@ -162,8 +181,8 @@ export class InputManager {
     if (this.mouseButtons.has(button)) return true;
     this._pollGamepad(false);
     if (!this.gamepad) return false;
-    if (button === 0) return (this.gamepad.buttons[7]?.value ?? 0) > .18; // RT / R2
-    if (button === 2) return (this.gamepad.buttons[6]?.value ?? 0) > .18; // LT / L2
+    if (button === 0) return this._buttonValue(7) > .18; // RT / R2
+    if (button === 2) return this._buttonValue(6) > .18; // LT / L2
     return false;
   }
 
@@ -180,8 +199,6 @@ export class InputManager {
     if (this.gamepad) {
       const rx = this._curvedAxis(this._axis(2), .11, 1.48);
       const ry = this._curvedAxis(this._axis(3), .11, 1.48);
-      // Convert stick velocity into mouse-equivalent delta so the existing
-      // camera sensitivity/recoil path remains identical for both devices.
       d.x += rx * 1500 * dt;
       d.y += ry * 1150 * dt;
     }
