@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { VisualCeilingWorld } from './VisualCeilingWorld.js';
 
 function rounded(size, mat, radius = .12, segments = 3) {
   const r = Math.min(radius, ...size.map((v) => Math.max(.01, v * .17)));
@@ -14,6 +15,7 @@ export class BikeWorldEnhancements {
     this.group.name = 'Bike World Enhancements';
     this.engine.scene.add(this.group);
     this.built = false;
+    this.visualCeiling = null;
   }
 
   build() {
@@ -26,25 +28,22 @@ export class BikeWorldEnhancements {
     this._addSafetySlab(0, -3900, 2500, 3000);
     this._addSafetySlab(0, -1800, 1800, 2100);
 
+    // v0.2 over-authored jumps and made ordinary riding feel like a stunt park.
+    // Keep only a few geographic jump opportunities. Airtime should come from
+    // reading the world and committing to a line, not from constant launch pads.
     const ramps = [
-      { x: 0, z: -760,  w: 22, l: 44, a: .16 },
-      { x: -88, z: -1120, w: 16, l: 34, a: .22 },
-      { x: 94, z: -1435, w: 17, l: 38, a: .24 },
-      { x: 0, z: -1815, w: 30, l: 56, a: .20 },
-      { x: -118, z: -2190, w: 22, l: 46, a: .25 },
-      { x: 112, z: -2490, w: 20, l: 42, a: .27 },
-      { x: 0, z: -2860, w: 36, l: 62, a: .19 },
-      { x: -132, z: -3225, w: 24, l: 48, a: .26 },
-      { x: 136, z: -3405, w: 24, l: 50, a: .28 }
+      { x: 0, z: -1815, w: 30, l: 56, a: .14 },
+      { x: -118, z: -2190, w: 22, l: 46, a: .17 },
+      { x: 0, z: -2860, w: 36, l: 62, a: .15 },
+      { x: 136, z: -3405, w: 24, l: 50, a: .18 }
     ];
-    ramps.forEach((def, i) => this._addRamp(def, i));
+    ramps.forEach((def) => this._addRamp(def));
 
-    // Large readable landing strips reward experimentation without turning the
-    // whole world into a stunt park. They also make jump lines visible at speed.
-    [
-      [0, -850, 36], [-88, -1210, 28], [94, -1535, 28], [0, -1950, 48],
-      [-118, -2300, 34], [112, -2600, 34], [0, -3010, 54], [-132, -3345, 36], [136, -3525, 36]
-    ].forEach(([x, z, w]) => this._addLandingStrip(x, z, w));
+    // Visual Ceiling I deliberately uses no imported art. This lets us measure
+    // how far Three/WebGPU + authored procedural systems can go before Scenario
+    // or a different engine enters the equation.
+    this.visualCeiling = new VisualCeilingWorld(this.engine, this.mats);
+    this.visualCeiling.build();
   }
 
   _addSafetySlab(x, z, width, length) {
@@ -55,7 +54,7 @@ export class BikeWorldEnhancements {
     );
   }
 
-  _addRamp({ x, z, w, l, a }, index) {
+  _addRamp({ x, z, w, l, a }) {
     const { world, RAPIER } = this.engine;
     const y = .32 + Math.sin(a) * l * .5;
     const root = new THREE.Group();
@@ -91,28 +90,5 @@ export class BikeWorldEnhancements {
         .setTranslation(x, y, z)
         .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
     );
-
-    // Sparse overhead markers make the best jump lines readable from a bike
-    // without painting giant arcade arrows onto the environment.
-    if (index === 3 || index === 6) {
-      const arch = new THREE.Mesh(
-        new THREE.TorusGeometry(w * .44, .18, 8, 28, Math.PI),
-        new THREE.MeshBasicMaterial({ color: 0x8f86ff, transparent: true, opacity: .36, depthWrite: false, blending: THREE.AdditiveBlending })
-      );
-      arch.position.set(x, y + 7.5, z - l * .32);
-      arch.rotation.set(0, 0, Math.PI);
-      arch.userData.worldSurface = false;
-      this.group.add(arch);
-    }
-  }
-
-  _addLandingStrip(x, z, width) {
-    const strip = rounded([width, .025, 5.5], this.mats.spectral, .01, 2);
-    strip.position.set(x, .13, z);
-    strip.material = strip.material.clone();
-    strip.material.transparent = true;
-    strip.material.opacity = .32;
-    strip.userData.worldSurface = false;
-    this.group.add(strip);
   }
 }
