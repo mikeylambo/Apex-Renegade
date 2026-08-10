@@ -38,12 +38,10 @@ export class HUD {
     bus.on('refusalTier', (tier) => {
       this.refusalTier.textContent = `T${tier} // ${TIER_NAMES[tier] || 'UNKNOWN'}`;
       this.refusalFill.classList.toggle('breakthrough', tier >= 2);
-      if (tier === 3) this._flashCenter('REFUSAL III // FLIGHT ONLINE — E TO TOGGLE', 3600);
+      if (tier === 3) this._flashCenter('REFUSAL III // FLIGHT ONLINE — E / D-PAD UP', 3600);
       else this._flashCenter(`REFUSAL ${tier} // ${TIER_NAMES[tier]}`, 2200);
     });
-    bus.on('refusalBreakthrough', ({ tier }) => {
-      if (tier > 0) this._pulseRefusal();
-    });
+    bus.on('refusalBreakthrough', ({ tier }) => { if (tier > 0) this._pulseRefusal(); });
 
     bus.on('pressure', ({ pct, stageName }) => {
       this.pressureFill.style.width = `${pct * 100}%`;
@@ -52,8 +50,19 @@ export class HUD {
     });
     bus.on('contacts', (count) => { this.contacts.textContent = `${count.toLocaleString()} CONTACTS`; });
     bus.on('mobilization', ({ name }) => this._flashCenter(name, 1800));
-    bus.on('reinforcementsInbound', ({ count }) => {
-      if (count >= 3) this._flashCenter(`REINFORCEMENTS // +${count}`, 950);
+    bus.on('reinforcementsInbound', ({ count }) => { if (count >= 3) this._flashCenter(`REINFORCEMENTS // +${count}`, 950); });
+
+    bus.on('regionChanged', ({ name }) => this._flashCenter(name, 2300));
+    bus.on('bikeMounted', () => {
+      this.weaponName.textContent = 'RENEGADE BIKE';
+      this.ammoReadout.textContent = 'RT THROTTLE';
+      this._flashCenter('RIDE // RT THROTTLE · LT BRAKE · A BOOST · LB DRIFT · D-PAD DOWN DISMOUNT', 3000);
+    });
+    bus.on('bikeDismounted', () => this._flashCenter('ON FOOT', 950));
+    bus.on('bikeBoost', () => {
+      this.ammoReadout.textContent = 'BOOST';
+      clearTimeout(this._bikeTimer);
+      this._bikeTimer = setTimeout(() => { this.ammoReadout.textContent = ''; }, 320);
     });
 
     bus.on('blastModeStart', () => this._showBanner(true));
@@ -97,9 +106,7 @@ export class HUD {
   _pulseDamage() {
     this.vignette.style.boxShadow = 'inset 0 0 180px 40px rgba(212,20,90,0.55)';
     clearTimeout(this._vignetteTimer);
-    this._vignetteTimer = setTimeout(() => {
-      this.vignette.style.boxShadow = 'inset 0 0 0 0 rgba(212,20,90,0)';
-    }, 220);
+    this._vignetteTimer = setTimeout(() => { this.vignette.style.boxShadow = 'inset 0 0 0 0 rgba(212,20,90,0)'; }, 220);
   }
 
   _pulseRefusal() {
