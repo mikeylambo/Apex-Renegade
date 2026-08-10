@@ -50,6 +50,7 @@ async function boot() {
   });
   bus.on('weaponFired', () => input.pulseGamepad(42, .10, .045));
   bus.on('playerDamaged', ({ amount }) => input.pulseGamepad(90, .18, Math.min(.42, .12 + amount * .009)));
+  bus.on('bikeDismounted', () => weaponSystem._announce());
 
   engine.setRenderFn((dt) => postfx.render(dt));
 
@@ -78,7 +79,6 @@ async function boot() {
   new MenuSystem(input, engine, hud, () => {
     const start = levelManager.loadCurrent();
     player.teleport(start);
-    bike.setSpawn(levelManager.getBikeSpawn());
     engine.start();
   });
 
