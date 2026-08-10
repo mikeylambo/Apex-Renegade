@@ -34,7 +34,7 @@ npm run preview
 
 The repo is connected to the **apex-renegade** Vercel project. See [`DEPLOYMENT.md`](./DEPLOYMENT.md).
 
-Pushes to `main` are the production iteration path; branches and pull requests can be used for preview deployments.
+Pushes to `main` are the production iteration path; branches and pull requests can be used for preview deployments. The current production target is **WORLD SPINE v0.1**.
 
 ## Stack
 
