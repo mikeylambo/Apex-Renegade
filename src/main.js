@@ -3,11 +3,15 @@ import { InputManager } from './core/InputManager.js';
 import { bus } from './core/GameState.js';
 import { PlayerController } from './player/PlayerController.js';
 import { PlayerCamera } from './player/PlayerCamera.js';
+import { PlayerMovementTuning, installPlayerMovementTuning } from './player/PlayerMovementTuning.js';
 import { WeaponSystem } from './player/WeaponSystem.js';
 import { RefusalSystem } from './player/RefusalSystem.js';
 import { RenegadeBike } from './player/RenegadeBike.js';
 import { LevelManager } from './world/LevelManager.js';
+import { BikeWorldEnhancements } from './world/BikeWorldEnhancements.js';
+import { WorldPerformanceTuner } from './world/WorldPerformanceTuner.js';
 import { HUD } from './ui/HUD.js';
+import { BikeHUDPrompts } from './ui/BikeHUDPrompts.js';
 import { MenuSystem } from './ui/MenuSystem.js';
 import { PostFX } from './fx/PostFX.js';
 import { Particles } from './fx/Particles.js';
@@ -73,6 +77,7 @@ async function boot() {
   const hud = new HUD();
 
   const player = new PlayerController(engine, input);
+  installPlayerMovementTuning(player, input);
   const playerCamera = new PlayerCamera(engine.camera, player);
   playerCamera.baseFov = input.settings.fov;
   playerCamera.targetFov = input.settings.fov;
@@ -85,7 +90,8 @@ async function boot() {
   const levelManager = new LevelManager(engine, player);
   const weaponSystem = new WeaponSystem(engine, input, engine.camera, player, levelManager);
   const refusalSystem = new RefusalSystem(player);
-  const bike = new RenegadeBike(engine, input, player, sharedMaterials);
+  const bike = new RenegadeBike(engine, input, player, sharedMaterials, weaponSystem);
+  const bikeHud = new BikeHUDPrompts(input, bike, hud);
   const postfx = new PostFX(engine);
 
   bus.on('recoil', ({ pitch, yaw }) => playerCamera.addRecoil(pitch, yaw));
@@ -105,6 +111,8 @@ async function boot() {
   engine.setRenderFn((dt) => postfx.render(dt));
 
   let releaseFoundation = null;
+  let bikeWorld = null;
+  let performanceTuner = null;
 
   engine.onFixedUpdate((fixedDt) => {
     bike.fixedUpdate(fixedDt);
@@ -128,6 +136,8 @@ async function boot() {
     weaponViewmodel.root.visible = !player.vehicleMounted;
     weaponViewmodel.update(dt, player);
     hud.update(dt, player, input);
+    bikeHud.update(dt);
+    performanceTuner?.update(dt);
     postfx.update(dt);
     releaseFoundation?.update(dt);
   });
@@ -135,6 +145,11 @@ async function boot() {
   new MenuSystem(input, engine, hud, () => {
     const start = levelManager.loadCurrent();
     player.teleport(start);
+    bike.setSpawn(levelManager.getBikeSpawn());
+    bikeWorld = new BikeWorldEnhancements(engine, sharedMaterials);
+    bikeWorld.build();
+    performanceTuner = new WorldPerformanceTuner(engine, player);
+    performanceTuner.capture();
     releaseFoundation?.start();
     engine.start();
   });
@@ -153,7 +168,7 @@ async function boot() {
   });
   installRemainingReleaseControls(releaseFoundation, input);
 
-  console.log('%cAPEX — World Spine v0.1 / Shooter Release Foundation v0.3', 'color:#9c8cff;font-weight:bold;');
+  console.log('%cAPEX — World Spine v0.1 / Renegade Bike v0.2 / Shooter Release Foundation v0.3', 'color:#9c8cff;font-weight:bold;');
 }
 
 boot().catch((err) => {
