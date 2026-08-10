@@ -2,9 +2,9 @@
 
 A fast, spectral open-world character-action FPS built with Three.js, WebGPU/TSL, Vite, and Rapier.
 
-Current baseline: **Pass VI — Open War Sandbox / Refusal Prototype**.
+Current baseline: **WORLD SPINE v0.1 — The Scar → The Expanse → Vertical Megacity + Renegade Bike**.
 
-The current prototype tests the new core thesis: overwhelming opposition is not the failure state — it is the progression system. Regional Pressure escalates visible enemy mobilization while Refusal adapts the Renegade into increasingly superhuman movement and firepower.
+The current prototype tests the new core thesis: overwhelming opposition is not the failure state — it is the progression system. Regional Pressure escalates visible enemy mobilization while Refusal adapts the Renegade into increasingly superhuman movement and firepower. WORLD SPINE v0.1 extends that loop across one continuous journey, adds region-driven lighting, more reliable megastructure collision, and the first third-person Renegade Bike traversal prototype.
 
 ## Quick start
 
