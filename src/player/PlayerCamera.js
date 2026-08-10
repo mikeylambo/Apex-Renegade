@@ -56,26 +56,36 @@ export class PlayerCamera {
     const pos = c.position;
     const forward = c.forward;
     const right = c.right;
-    const speed = Math.hypot(c.velocity.x, c.velocity.z);
+    const telemetry = c.vehicleTelemetry || {};
+    const speed = Math.abs(Number(telemetry.speed)) || Math.hypot(c.velocity.x, c.velocity.z);
+    const speed01 = THREE.MathUtils.clamp(speed / 82, 0, 1);
+    const drift = THREE.MathUtils.clamp(Number(telemetry.drift) || 0, 0, 1);
+    const boost = THREE.MathUtils.clamp(Number(telemetry.boost) || 0, 0, 1);
+    const steer = THREE.MathUtils.clamp(Number(telemetry.steer) || 0, -1.5, 1.5);
+    const air = Math.min(1, (Number(telemetry.airTime) || 0) / 1.2);
 
+    const backDistance = 6.6 + speed01 * 3.8 + boost * 1.4;
+    const sideOffset = .18 - drift * steer * 1.15;
+    const height = 3.05 + speed01 * .32 + air * .70;
     const desired = pos.clone()
-      .addScaledVector(forward, -6.5)
-      .addScaledVector(right, .18)
-      .add(new THREE.Vector3(0, 3.15, 0));
+      .addScaledVector(forward, -backDistance)
+      .addScaledVector(right, sideOffset)
+      .add(new THREE.Vector3(0, height, 0));
 
     if (this._vehicleCameraPos.lengthSq() < .01) this._vehicleCameraPos.copy(desired);
-    this._vehicleCameraPos.lerp(desired, 1 - Math.pow(.00003, dt));
+    const follow = boost > .2 ? .00055 : drift > .25 ? .0012 : .000035;
+    this._vehicleCameraPos.lerp(desired, 1 - Math.pow(follow, dt));
     this.camera.position.copy(this._vehicleCameraPos);
 
     const target = pos.clone()
-      .addScaledVector(forward, 9.5)
-      .add(new THREE.Vector3(0, 1.15 - c.pitch * 5.2, 0));
+      .addScaledVector(forward, 9.5 + speed01 * 8.5)
+      .addScaledVector(right, drift * steer * .55)
+      .add(new THREE.Vector3(0, 1.15 - c.pitch * 5.2 + air * .35, 0));
     this.camera.lookAt(target);
-    this.camera.rotation.z = THREE.MathUtils.damp(this.camera.rotation.z, 0, 9, dt);
+    this.camera.rotation.z += -drift * steer * .035;
 
-    const speedFov = THREE.MathUtils.clamp((speed - 12) / 60, 0, 1);
-    const desiredFov = 86 + speedFov * 17;
-    this.camera.fov = THREE.MathUtils.damp(this.camera.fov, desiredFov, 6, dt);
+    const desiredFov = 86 + speed01 * 16 + boost * 8;
+    this.camera.fov = THREE.MathUtils.damp(this.camera.fov, desiredFov, boost > .2 ? 8 : 6, dt);
     this.camera.updateProjectionMatrix();
     this.targetFov = this.baseFov;
   }
