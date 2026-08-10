@@ -17,6 +17,52 @@ import { WeaponViewmodel } from './player/WeaponViewmodel.js';
 import { ShooterReleaseFoundation } from './game/ShooterReleaseFoundation.js';
 import { createProceduralMaterials } from './world/ProceduralMaterials.js';
 
+function installRemainingReleaseControls(release, input) {
+  const mouseKey = 'apex.mouseBindings.v1';
+  let mouse = { fire: 0, aim: 2 };
+  try { mouse = { ...mouse, ...JSON.parse(localStorage.getItem(mouseKey) || '{}') }; } catch {}
+
+  const baseMouseDown = input.isMouseDown.bind(input);
+  input.isMouseDown = (button = 0) => {
+    if (button === 0) return input.mouseButtons.has(Number(mouse.fire)) || (input._actionButtonValue?.('fire') || 0) > .18;
+    if (button === 2) return input.mouseButtons.has(Number(mouse.aim)) || (input._actionButtonValue?.('aim') || 0) > .18;
+    return baseMouseDown(button);
+  };
+  input.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  const root = document.querySelector('#release-settings');
+  if (!root || root.querySelector('#release-final-controls')) return;
+  const block = document.createElement('div');
+  block.id = 'release-final-controls';
+  block.className = 'release-section';
+  block.innerHTML = `
+    <h3>Mouse & Render Timing</h3>
+    <div class="setting-row"><label>Mouse Fire Button</label><input id="release-mouse-fire" type="range" min="0" max="2" step="1"><span class="setting-value" id="release-mouse-fire-value"></span></div>
+    <div class="setting-row"><label>Mouse Aim Button</label><input id="release-mouse-aim" type="range" min="0" max="2" step="1"><span class="setting-value" id="release-mouse-aim-value"></span></div>
+    <div class="setting-row"><label>Render Frame Cap</label><input id="release-frame-cap" type="range" min="0" max="120" step="30"><span class="setting-value" id="release-frame-cap-value"></span></div>
+    <div class="release-info">Mouse buttons: 0 Left · 1 Middle · 2 Right. Frame cap 0 = uncapped. VSync remains browser-compositor controlled in this web build.</div>`;
+  const display = root.querySelector('#release-display')?.closest('.release-section');
+  (display || root).appendChild(block);
+
+  const fire = block.querySelector('#release-mouse-fire');
+  const aim = block.querySelector('#release-mouse-aim');
+  const cap = block.querySelector('#release-frame-cap');
+  const fireOut = block.querySelector('#release-mouse-fire-value');
+  const aimOut = block.querySelector('#release-mouse-aim-value');
+  const capOut = block.querySelector('#release-frame-cap-value');
+  const label = (n) => ['LEFT','MIDDLE','RIGHT'][Number(n)] || 'LEFT';
+  const sync = () => {
+    fire.value = mouse.fire; aim.value = mouse.aim; cap.value = Number(release.settings.frameCap) || 0;
+    fireOut.textContent = label(mouse.fire); aimOut.textContent = label(mouse.aim);
+    capOut.textContent = Number(cap.value) === 0 ? 'UNCAPPED' : `${cap.value} FPS`;
+  };
+  const saveMouse = () => { try { localStorage.setItem(mouseKey, JSON.stringify(mouse)); } catch {} };
+  fire.addEventListener('input', () => { mouse.fire = Number(fire.value); if (mouse.fire === mouse.aim) mouse.aim = mouse.fire === 2 ? 0 : 2; saveMouse(); sync(); });
+  aim.addEventListener('input', () => { mouse.aim = Number(aim.value); if (mouse.aim === mouse.fire) mouse.fire = mouse.aim === 0 ? 2 : 0; saveMouse(); sync(); });
+  cap.addEventListener('input', () => { release.setSetting('frameCap', Number(cap.value)); sync(); });
+  sync();
+}
+
 async function boot() {
   const container = document.getElementById('app');
   const engine = new Engine(container);
@@ -105,6 +151,7 @@ async function boot() {
     postfx,
     bike
   });
+  installRemainingReleaseControls(releaseFoundation, input);
 
   console.log('%cAPEX — World Spine v0.1 / Shooter Release Foundation v0.3', 'color:#9c8cff;font-weight:bold;');
 }
