@@ -56,6 +56,7 @@ async function boot() {
 
   engine.onFixedUpdate((fixedDt) => {
     bike.fixedUpdate(fixedDt);
+    if (player.vehicleMounted) player.yaw = bike.heading;
     player.fixedUpdate(fixedDt);
   });
 
