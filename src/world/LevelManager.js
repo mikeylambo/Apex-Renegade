@@ -1,11 +1,9 @@
 import { OpenWorldWarDirector } from '../enemies/OpenWorldWarDirector.js';
 import { Pickup } from './Pickup.js';
 import { bus, GameState } from '../core/GameState.js';
-import { OpenWorldWarzoneLevel } from './levels/openworld_warzone.js';
+import { WorldSpineLevel } from './levels/world_spine.js';
 
-// Pass VI deliberately focuses on one oversized region. We are proving the
-// world/combat grammar before multiplying content.
-const MANIFEST = [OpenWorldWarzoneLevel];
+const MANIFEST = [WorldSpineLevel];
 
 export class LevelManager {
   constructor(engine, playerController) {
@@ -43,8 +41,10 @@ export class LevelManager {
     const playerPos = this.player.position;
     for (const p of this.pickups) p.update(dt, playerPos);
     this.pickups = this.pickups.filter((p) => !p.collected);
+    this._built?.updateWorldState?.(dt, playerPos);
   }
 
+  getBikeSpawn() { return this._built?.bikeSpawn?.clone?.() || null; }
   getHittableObjects() { return this.spawner?.getHittableObjects?.() || []; }
   getEnemies() { return this.spawner?.getEnemies?.() || []; }
   getWorldHitObjects() { return this._built?.worldHitObjects || []; }
