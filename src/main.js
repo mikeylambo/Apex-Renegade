@@ -27,6 +27,9 @@ async function boot() {
 
   const player = new PlayerController(engine, input);
   const playerCamera = new PlayerCamera(engine.camera, player);
+  playerCamera.baseFov = input.settings.fov;
+  playerCamera.targetFov = input.settings.fov;
+
   const particles = new Particles(engine, engine.camera);
   const impactDecals = new ImpactDecals(engine);
   const atmosphere = new WorldAtmosphere(engine);
@@ -40,12 +43,12 @@ async function boot() {
 
   bus.on('recoil', ({ pitch, yaw }) => playerCamera.addRecoil(pitch, yaw));
   bus.on('blastModeStart', () => {
-    playerCamera.setFovPunch(102);
+    playerCamera.setFovPunch(input.settings.fov + 10);
     input.pulseGamepad(180, .52, .30);
   });
-  bus.on('blastModeEnd', () => playerCamera.setFovPunch(92));
+  bus.on('blastModeEnd', () => playerCamera.setFovPunch(input.settings.fov));
   bus.on('refusalTier', (tier) => {
-    playerCamera.setFovPunch(92 + tier * 1.6);
+    playerCamera.setFovPunch(input.settings.fov + tier * 1.6);
     input.pulseGamepad(220, .48, .36);
   });
   bus.on('weaponFired', () => input.pulseGamepad(42, .10, .045));
@@ -62,6 +65,7 @@ async function boot() {
 
   engine.onUpdate((dt) => {
     input.update();
+    playerCamera.baseFov = Number(input.settings.fov) || 92;
     const mouseDelta = input.consumeMouseDelta();
     player.updateLook(mouseDelta);
     bike.update(dt);
@@ -74,6 +78,7 @@ async function boot() {
     atmosphere.update(dt);
     weaponViewmodel.root.visible = !player.vehicleMounted;
     weaponViewmodel.update(dt, player);
+    hud.update(dt, player, input);
     postfx.update(dt);
   });
 
@@ -83,7 +88,7 @@ async function boot() {
     engine.start();
   });
 
-  console.log('%cAPEX — World Spine v0.1', 'color:#9c8cff;font-weight:bold;');
+  console.log('%cAPEX — World Spine v0.1 / Shooter Foundation v0.2', 'color:#9c8cff;font-weight:bold;');
 }
 
 boot().catch((err) => {
