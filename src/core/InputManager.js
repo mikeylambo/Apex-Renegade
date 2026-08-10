@@ -1,13 +1,71 @@
 /**
  * Centralized keyboard / mouse / USB controller input.
  *
- * Standard Gamepad mapping (Xbox labels / PlayStation equivalents):
- *   LS move/steer, RS look, RT fire / bike throttle, LT aim / bike brake,
- *   A/Cross jump / bike boost, B/Circle crouch-slide, X/Square reload,
- *   Y/Triangle weapon cycle, LB dash / bike drift, RB Apex Surge,
- *   L3 sprint, D-pad Up flight toggle, D-pad Down mount/dismount,
- *   D-pad Left/Right weapon cycle.
+ * Shooter Foundation v0.2 adds persistent controller bindings plus separate
+ * mouse/controller aim tuning. Keyboard/mouse remains fixed in this pass;
+ * controller actions can be rebound in-game.
  */
+const SETTINGS_KEY = 'apex.inputSettings.v2';
+const BINDINGS_KEY = 'apex.controllerBindings.v2';
+
+const DEFAULT_SETTINGS = Object.freeze({
+  mouseSensitivity: 1.0,
+  controllerSensitivityX: 1.0,
+  controllerSensitivityY: 1.0,
+  rightStickDeadzone: 0.19,
+  rightStickCurve: 1.55,
+  adsMultiplier: 0.72,
+  invertControllerY: false,
+  vibration: true,
+  fov: 92,
+  reticleScale: 1.0
+});
+
+const DEFAULT_BINDINGS = Object.freeze({
+  jump: 0,          // A / Cross
+  crouch: 1,        // B / Circle
+  reload: 2,        // X / Square
+  weaponNext: 3,    // Y / Triangle
+  dash: 4,          // LB / L1
+  surge: 5,         // RB / R1
+  aim: 6,           // LT / L2
+  fire: 7,          // RT / R2
+  pause: 9,         // Menu / Options
+  sprint: 10,       // L3
+  flight: 12,       // D-pad Up
+  bike: 13,         // D-pad Down
+  weaponPrev: 14    // D-pad Left
+});
+
+const BUTTON_LABELS = [
+  'A / CROSS', 'B / CIRCLE', 'X / SQUARE', 'Y / TRIANGLE',
+  'LB / L1', 'RB / R1', 'LT / L2', 'RT / R2',
+  'VIEW / SHARE', 'MENU / OPTIONS', 'L3', 'R3',
+  'D-PAD UP', 'D-PAD DOWN', 'D-PAD LEFT', 'D-PAD RIGHT'
+];
+
+const CODE_TO_ACTION = Object.freeze({
+  Space: 'jump',
+  ControlLeft: 'crouch',
+  KeyC: 'crouch',
+  KeyR: 'reload',
+  KeyQ: 'dash',
+  KeyF: 'surge',
+  ShiftLeft: 'sprint',
+  KeyE: 'flight',
+  KeyV: 'bike'
+});
+
+function loadStored(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return { ...fallback };
+    return { ...fallback, ...JSON.parse(raw) };
+  } catch {
+    return { ...fallback };
+  }
+}
+
 export class InputManager {
   constructor(domElement) {
     this.domElement = domElement;
@@ -17,6 +75,9 @@ export class InputManager {
     this.pointerLocked = false;
     this.wheelDelta = 0;
 
+    this.settings = loadStored(SETTINGS_KEY, DEFAULT_SETTINGS);
+    this.bindings = loadStored(BINDINGS_KEY, DEFAULT_BINDINGS);
+
     this.gamepadIndex = null;
     this.gamepad = null;
     this.gamepadButtons = [];
@@ -25,6 +86,8 @@ export class InputManager {
     this._lastLookConsume = performance.now();
     this.onGamepadActivity = null;
     this.onGamepadChange = null;
+    this.onSettingsChange = null;
+    this.onBindingsChange = null;
 
     window.addEventListener('keydown', (e) => this.keys.add(e.code));
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
@@ -65,8 +128,7 @@ export class InputManager {
       this.onGamepadChange?.({ connected: false, id: e.gamepad.id, index: e.gamepad.index });
     });
 
-    // Gamepad input must work before engine.start(), so the start screen gets a
-    // lightweight independent poll. The main loop also refreshes it per frame.
+    // Must continue while the simulation is paused so gamepad UI / remapping works.
     this._gamepadPollTimer = window.setInterval(() => this._pollGamepad(true), 50);
     this._pollGamepad(false);
   }
@@ -84,6 +146,43 @@ export class InputManager {
   }
 
   getGamepadName() { return this.gamepad?.id || null; }
+
+  setSetting(key, value) {
+    if (!(key in DEFAULT_SETTINGS)) return;
+    this.settings[key] = value;
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings)); } catch {}
+    this.onSettingsChange?.({ ...this.settings });
+  }
+
+  resetSettings() {
+    this.settings = { ...DEFAULT_SETTINGS };
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings)); } catch {}
+    this.onSettingsChange?.({ ...this.settings });
+  }
+
+  setBinding(action, buttonIndex) {
+    if (!(action in DEFAULT_BINDINGS)) return;
+    const old = this.bindings[action];
+    const conflicting = Object.entries(this.bindings).find(([other, index]) => other !== action && index === buttonIndex)?.[0];
+    if (conflicting) this.bindings[conflicting] = old;
+    this.bindings[action] = buttonIndex;
+    try { localStorage.setItem(BINDINGS_KEY, JSON.stringify(this.bindings)); } catch {}
+    this.onBindingsChange?.({ ...this.bindings });
+  }
+
+  resetBindings() {
+    this.bindings = { ...DEFAULT_BINDINGS };
+    try { localStorage.setItem(BINDINGS_KEY, JSON.stringify(this.bindings)); } catch {}
+    this.onBindingsChange?.({ ...this.bindings });
+  }
+
+  getBinding(action) { return this.bindings[action]; }
+  getBindings() { return { ...this.bindings }; }
+  getButtonLabel(index) { return BUTTON_LABELS[index] || `BUTTON ${index}`; }
+  getBindingLabel(action) { return this.getButtonLabel(this.bindings[action]); }
+  getActionForButton(index) {
+    return Object.entries(this.bindings).find(([, button]) => button === index)?.[0] || null;
+  }
 
   _pollGamepad(emitActivity = false) {
     const pads = navigator.getGamepads?.();
@@ -103,11 +202,11 @@ export class InputManager {
       const pressed = nextButtons[i] && !this._previousGamepadButtons[i];
       if (!pressed) continue;
 
-      // Y/Triangle and D-pad left/right cycle weapons on button-down edges.
-      if (i === 3 || i === 15) this._gamepadWheelDelta += 1;
-      if (i === 14) this._gamepadWheelDelta -= 1;
+      const action = this.getActionForButton(i);
+      if (action === 'weaponNext') this._gamepadWheelDelta += 1;
+      if (action === 'weaponPrev') this._gamepadWheelDelta -= 1;
 
-      if (emitActivity) this.onGamepadActivity?.({ index: i, gamepad: pad });
+      if (emitActivity) this.onGamepadActivity?.({ index: i, action, gamepad: pad });
     }
 
     this.gamepadButtons = nextButtons;
@@ -122,6 +221,16 @@ export class InputManager {
   _buttonValue(index) {
     this._pollGamepad(false);
     return this.gamepad?.buttons?.[index]?.value ?? 0;
+  }
+
+  _actionButtonValue(action) {
+    const index = this.bindings[action];
+    return index == null ? 0 : this._buttonValue(index);
+  }
+
+  _actionDown(action) {
+    const index = this.bindings[action];
+    return index != null && !!this.gamepadButtons[index];
   }
 
   _deadzone(value, zone = .12) {
@@ -148,41 +257,31 @@ export class InputManager {
     const keyboardSteer = (this.keys.has('KeyD') ? 1 : 0) - (this.keys.has('KeyA') ? 1 : 0);
     return {
       steer: Math.abs(keyboardSteer) > .01 ? keyboardSteer : move.x,
-      throttle: Math.max(keyboardThrottle, this._buttonValue(7)),
-      brake: Math.max(keyboardBrake, this._buttonValue(6))
+      throttle: Math.max(keyboardThrottle, this._actionButtonValue('fire')),
+      brake: Math.max(keyboardBrake, this._actionButtonValue('aim'))
     };
   }
 
   isDown(code) {
     if (this.keys.has(code)) return true;
     this._pollGamepad(false);
-    const b = (i) => !!this.gamepadButtons[i];
     const lx = this._axis(0), ly = this._axis(1);
 
-    switch (code) {
-      case 'KeyW': return ly < -.38;
-      case 'KeyS': return ly > .38;
-      case 'KeyA': return lx < -.38;
-      case 'KeyD': return lx > .38;
-      case 'Space': return b(0);                   // A / Cross
-      case 'ControlLeft':
-      case 'KeyC': return b(1);                  // B / Circle
-      case 'KeyR': return b(2);                  // X / Square
-      case 'KeyQ': return b(4);                  // LB / L1
-      case 'KeyF': return b(5);                  // RB / R1
-      case 'ShiftLeft': return b(10);             // L3
-      case 'KeyE': return b(12);                  // D-pad Up
-      case 'KeyV': return b(13);                  // D-pad Down
-      default: return false;
-    }
+    if (code === 'KeyW') return ly < -.38;
+    if (code === 'KeyS') return ly > .38;
+    if (code === 'KeyA') return lx < -.38;
+    if (code === 'KeyD') return lx > .38;
+
+    const action = CODE_TO_ACTION[code];
+    return action ? this._actionDown(action) : false;
   }
 
   isMouseDown(button = 0) {
     if (this.mouseButtons.has(button)) return true;
     this._pollGamepad(false);
     if (!this.gamepad) return false;
-    if (button === 0) return this._buttonValue(7) > .18; // RT / R2
-    if (button === 2) return this._buttonValue(6) > .18; // LT / L2
+    if (button === 0) return this._actionButtonValue('fire') > .18;
+    if (button === 2) return this._actionButtonValue('aim') > .18;
     return false;
   }
 
@@ -192,15 +291,26 @@ export class InputManager {
     const dt = Math.max(.001, Math.min(.05, (now - this._lastLookConsume) / 1000));
     this._lastLookConsume = now;
 
-    const d = { ...this.mouseDelta };
+    const mouseScale = Number(this.settings.mouseSensitivity) || 1;
+    const d = {
+      x: this.mouseDelta.x * mouseScale,
+      y: this.mouseDelta.y * mouseScale
+    };
     this.mouseDelta.x = 0;
     this.mouseDelta.y = 0;
 
     if (this.gamepad) {
-      const rx = this._curvedAxis(this._axis(2), .11, 1.48);
-      const ry = this._curvedAxis(this._axis(3), .11, 1.48);
-      d.x += rx * 1500 * dt;
-      d.y += ry * 1150 * dt;
+      const zone = Math.max(.02, Math.min(.45, Number(this.settings.rightStickDeadzone) || .19));
+      const curve = Math.max(1, Math.min(2.8, Number(this.settings.rightStickCurve) || 1.55));
+      const rx = this._curvedAxis(this._axis(2), zone, curve);
+      let ry = this._curvedAxis(this._axis(3), zone, curve);
+      if (this.settings.invertControllerY) ry *= -1;
+
+      const ads = this.isMouseDown(2) ? (Number(this.settings.adsMultiplier) || .72) : 1;
+      const sx = (Number(this.settings.controllerSensitivityX) || 1) * ads;
+      const sy = (Number(this.settings.controllerSensitivityY) || 1) * ads;
+      d.x += rx * 1500 * sx * dt;
+      d.y += ry * 1150 * sy * dt;
     }
 
     return d;
@@ -215,6 +325,7 @@ export class InputManager {
   }
 
   pulseGamepad(duration = 70, weak = .18, strong = .08) {
+    if (!this.settings.vibration) return;
     this._pollGamepad(false);
     const actuator = this.gamepad?.vibrationActuator;
     if (!actuator?.playEffect) return;
