@@ -1,10 +1,11 @@
 import { Engine } from './core/Engine.js';
 import { InputManager } from './core/InputManager.js';
-import { bus, GameState } from './core/GameState.js';
+import { bus } from './core/GameState.js';
 import { PlayerController } from './player/PlayerController.js';
 import { PlayerCamera } from './player/PlayerCamera.js';
 import { WeaponSystem } from './player/WeaponSystem.js';
 import { RefusalSystem } from './player/RefusalSystem.js';
+import { RenegadeBike } from './player/RenegadeBike.js';
 import { LevelManager } from './world/LevelManager.js';
 import { HUD } from './ui/HUD.js';
 import { MenuSystem } from './ui/MenuSystem.js';
@@ -29,11 +30,12 @@ async function boot() {
   const particles = new Particles(engine, engine.camera);
   const impactDecals = new ImpactDecals(engine);
   const atmosphere = new WorldAtmosphere(engine);
-  const viewmodelMaterials = createProceduralMaterials(engine.renderer);
-  const weaponViewmodel = new WeaponViewmodel(engine, engine.camera, viewmodelMaterials);
+  const sharedMaterials = createProceduralMaterials(engine.renderer);
+  const weaponViewmodel = new WeaponViewmodel(engine, engine.camera, sharedMaterials);
   const levelManager = new LevelManager(engine, player);
   const weaponSystem = new WeaponSystem(engine, input, engine.camera, player, levelManager);
   const refusalSystem = new RefusalSystem(player);
+  const bike = new RenegadeBike(engine, input, player, sharedMaterials);
   const postfx = new PostFX(engine);
 
   bus.on('recoil', ({ pitch, yaw }) => playerCamera.addRecoil(pitch, yaw));
@@ -52,6 +54,7 @@ async function boot() {
   engine.setRenderFn((dt) => postfx.render(dt));
 
   engine.onFixedUpdate((fixedDt) => {
+    bike.fixedUpdate(fixedDt);
     player.fixedUpdate(fixedDt);
   });
 
@@ -59,6 +62,7 @@ async function boot() {
     input.update();
     const mouseDelta = input.consumeMouseDelta();
     player.updateLook(mouseDelta);
+    bike.update(dt);
     playerCamera.update(dt);
     weaponSystem.update(dt);
     refusalSystem.update(dt);
@@ -66,6 +70,7 @@ async function boot() {
     particles.update(dt);
     impactDecals.update(dt);
     atmosphere.update(dt);
+    weaponViewmodel.root.visible = !player.vehicleMounted;
     weaponViewmodel.update(dt, player);
     postfx.update(dt);
   });
@@ -73,10 +78,11 @@ async function boot() {
   new MenuSystem(input, engine, hud, () => {
     const start = levelManager.loadCurrent();
     player.teleport(start);
+    bike.setSpawn(levelManager.getBikeSpawn());
     engine.start();
   });
 
-  console.log('%cAPEX — Open War Sandbox / Refusal Prototype', 'color:#b24bff;font-weight:bold;');
+  console.log('%cAPEX — World Spine v0.1', 'color:#9c8cff;font-weight:bold;');
 }
 
 boot().catch((err) => {
