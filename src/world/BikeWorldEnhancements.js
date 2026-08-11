@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { VisualCeilingWorld } from './VisualCeilingWorld.js';
+import { VisualCeilingWorldII } from './VisualCeilingWorldII.js';
 
 function rounded(size, mat, radius = .12, segments = 3) {
   const r = Math.min(radius, ...size.map((v) => Math.max(.01, v * .17)));
@@ -16,6 +17,7 @@ export class BikeWorldEnhancements {
     this.engine.scene.add(this.group);
     this.built = false;
     this.visualCeiling = null;
+    this.visualCeilingII = null;
   }
 
   build() {
@@ -28,22 +30,22 @@ export class BikeWorldEnhancements {
     this._addSafetySlab(0, -3900, 2500, 3000);
     this._addSafetySlab(0, -1800, 1800, 2100);
 
-    // v0.2 over-authored jumps and made ordinary riding feel like a stunt park.
-    // Keep only a few geographic jump opportunities. Airtime should come from
-    // reading the world and committing to a line, not from constant launch pads.
+    // Keep only a handful of deliberate geographic jump opportunities. The bike
+    // should read terrain rather than constantly behaving like a stunt vehicle.
     const ramps = [
-      { x: 0, z: -1815, w: 30, l: 56, a: .14 },
-      { x: -118, z: -2190, w: 22, l: 46, a: .17 },
-      { x: 0, z: -2860, w: 36, l: 62, a: .15 },
-      { x: 136, z: -3405, w: 24, l: 50, a: .18 }
+      { x: 0, z: -1815, w: 30, l: 56, a: .12 },
+      { x: -118, z: -2190, w: 22, l: 46, a: .14 },
+      { x: 0, z: -2860, w: 36, l: 62, a: .13 }
     ];
     ramps.forEach((def) => this._addRamp(def));
 
-    // Visual Ceiling I deliberately uses no imported art. This lets us measure
-    // how far Three/WebGPU + authored procedural systems can go before Scenario
-    // or a different engine enters the equation.
+    // Visual Ceiling I: generated textures, facade information, atmosphere and
+    // world dressing. Visual Ceiling II: terrain relief, city-canyon hierarchy,
+    // local light pools, aerial traffic and denser infrastructure. No imported art.
     this.visualCeiling = new VisualCeilingWorld(this.engine, this.mats);
     this.visualCeiling.build();
+    this.visualCeilingII = new VisualCeilingWorldII(this.engine, this.mats);
+    this.visualCeilingII.build();
   }
 
   _addSafetySlab(x, z, width, length) {
