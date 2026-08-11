@@ -66,6 +66,7 @@ export class WorldAtmosphere {
     this.engine = engine;
     this.skyGroup = new THREE.Group();
     this.landmarkGroup = new THREE.Group();
+    this._driftTime = 0;
     engine.scene.add(this.skyGroup, this.landmarkGroup);
 
     this.sky = new THREE.Mesh(
@@ -81,8 +82,6 @@ export class WorldAtmosphere {
     this.cloudDome.rotation.y = .5;
     this.skyGroup.add(this.cloudDome);
 
-    // A fixed distant anomaly provides a cosmological anchor while the actual
-    // cities/terrain supply the horizon silhouettes.
     const body = new THREE.Mesh(
       new THREE.SphereGeometry(230, 40, 28),
       new THREE.MeshStandardMaterial({ color: 0x737d88, roughness: .96, metalness: 0, emissive: 0x152032, emissiveIntensity: .12 })
@@ -110,15 +109,13 @@ export class WorldAtmosphere {
     }
 
     const tex = radialTexture('rgba(225,235,247,1)', 'rgba(110,127,154,.30)');
-    const count = 1800, geo = new THREE.BufferGeometry(), p = new Float32Array(count * 3), speeds = new Float32Array(count);
+    const count = 1800, geo = new THREE.BufferGeometry(), p = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
       p[i * 3] = (Math.random() - .5) * 1800;
       p[i * 3 + 1] = Math.random() * 260 - 40;
       p[i * 3 + 2] = (Math.random() - .5) * 1800;
-      speeds[i] = .04 + Math.random() * .13;
     }
     geo.setAttribute('position', new THREE.BufferAttribute(p, 3));
-    this.speeds = speeds;
     this.drift = new THREE.Points(geo, new THREE.PointsMaterial({ map: tex, size: .12, color: 0xc5d2e7, transparent: true, opacity: .18, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true }));
     this.skyGroup.add(this.drift);
 
@@ -135,21 +132,17 @@ export class WorldAtmosphere {
 
   update(dt) {
     const cam = this.engine.camera.position;
-    // Sky/particulate field follows the player so kilometer-scale travel never
-    // exits the atmospheric volume. The distant anomaly remains fixed in world space.
+    this._driftTime += dt;
+    // Move the atmospheric field as a whole instead of rewriting 1,800 vertex
+    // positions on the CPU every frame. The perceived motion is the same at
+    // gameplay scale and removes a persistent main-thread cost.
     this.skyGroup.position.set(cam.x, 0, cam.z);
     this.cloudDome.rotation.y += dt * .0011;
     this.sky.rotation.y += dt * .00006;
+    this.drift.rotation.y += dt * .0018;
+    this.drift.position.x = Math.sin(this._driftTime * .055) * 26;
+    this.drift.position.y = Math.sin(this._driftTime * .12) * 6;
+    this.drift.position.z = Math.cos(this._driftTime * .041) * 18;
     for (let i = 0; i < this.pressureRings.length; i++) this.pressureRings[i].rotation.z += dt * (i % 2 ? -.0009 : .00065);
-
-    const p = this.drift.geometry.attributes.position;
-    for (let i = 0; i < p.count; i++) {
-      let y = p.getY(i) + dt * this.speeds[i];
-      let x = p.getX(i) + dt * .012 * Math.sin(i);
-      if (y > 220) y = -40;
-      if (x > 900) x = -900;
-      p.setXYZ(i, x, y, p.getZ(i));
-    }
-    p.needsUpdate = true;
   }
 }
