@@ -63,10 +63,11 @@ export class PlayerCamera {
     const boost = THREE.MathUtils.clamp(Number(telemetry.boost) || 0, 0, 1);
     const steer = THREE.MathUtils.clamp(Number(telemetry.steer) || 0, -1.5, 1.5);
     const air = Math.min(1, (Number(telemetry.airTime) || 0) / 1.2);
+    const wheelie = THREE.MathUtils.clamp(Number(telemetry.wheelie) || 0, 0, 1);
 
-    const backDistance = 6.6 + speed01 * 3.8 + boost * 1.4;
+    const backDistance = 6.6 + speed01 * 3.8 + boost * 1.4 + wheelie * .75;
     const sideOffset = .18 - drift * steer * 1.15;
-    const height = 3.05 + speed01 * .32 + air * .70;
+    const height = 3.05 + speed01 * .32 + air * .70 + wheelie * .18;
     const desired = pos.clone()
       .addScaledVector(forward, -backDistance)
       .addScaledVector(right, sideOffset)
@@ -80,7 +81,7 @@ export class PlayerCamera {
     const target = pos.clone()
       .addScaledVector(forward, 9.5 + speed01 * 8.5)
       .addScaledVector(right, drift * steer * .55)
-      .add(new THREE.Vector3(0, 1.15 - c.pitch * 5.2 + air * .35, 0));
+      .add(new THREE.Vector3(0, 1.15 - c.pitch * 5.2 + air * .35 + wheelie * .42, 0));
     this.camera.lookAt(target);
     this.camera.rotation.z += -drift * steer * .035;
 

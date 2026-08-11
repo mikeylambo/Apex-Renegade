@@ -7,6 +7,7 @@ import { installPlayerMovementTuning } from './player/PlayerMovementTuning.js';
 import { WeaponSystem } from './player/WeaponSystem.js';
 import { RefusalSystem } from './player/RefusalSystem.js';
 import { RenegadeBike } from './player/RenegadeBike.js';
+import { installBikeFeelTuning, prewarmBikeMountVisuals } from './player/BikeFeelTuning.js';
 import { LevelManager } from './world/LevelManager.js';
 import { BikeWorldEnhancements } from './world/BikeWorldEnhancements.js';
 import { WorldPerformanceTuner } from './world/WorldPerformanceTuner.js';
@@ -94,6 +95,9 @@ async function boot() {
   const bikeHud = new BikeHUDPrompts(input, bike, hud);
   const postfx = new PostFX(engine);
 
+  installBikeFeelTuning(bike, input);
+  await prewarmBikeMountVisuals(engine, postfx, bike);
+
   bus.on('recoil', ({ pitch, yaw }) => playerCamera.addRecoil(pitch, yaw));
   bus.on('blastModeStart', () => {
     playerCamera.setFovPunch(input.settings.fov + 10);
@@ -168,7 +172,7 @@ async function boot() {
   });
   installRemainingReleaseControls(releaseFoundation, input);
 
-  console.log('%cAPEX — World Spine v0.1 / Renegade Bike v0.2 / Shooter Release Foundation v0.3', 'color:#9c8cff;font-weight:bold;');
+  console.log('%cAPEX — Visual Ceiling III / Renegade Bike v0.2 / Shooter Release Foundation v0.3', 'color:#9c8cff;font-weight:bold;');
 }
 
 boot().catch((err) => {
