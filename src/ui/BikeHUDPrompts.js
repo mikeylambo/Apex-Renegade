@@ -23,8 +23,6 @@ export class BikeHUDPrompts {
     bus.on('bikeRecallArrived', () => this._flash('RENEGADE BIKE // READY'));
     bus.on('bikeRecovered', () => this._flash('WORLD RECOVERY // BIKE RESTORED'));
     bus.on('bikeLanded', ({ airTime, clean }) => {
-      // Ordinary terrain separation is just riding. Only a genuinely committed
-      // jump earns presentation, and even then the feedback stays understated.
       if (airTime < 1.35) return;
       if (clean) this._flash('CLEAN LANDING');
     });
@@ -49,7 +47,7 @@ export class BikeHUDPrompts {
     }
 
     this.prompt = document.createElement('div'); this.prompt.id = 'bike-prompt'; document.body.appendChild(this.prompt);
-    this.controls = document.createElement('div'); this.controls.id = 'bike-controls'; this.controls.textContent = 'RT THROTTLE · LT BRAKE · A BOOST · LB DRIFT · RB CORONA · X RELOAD · D-PAD ↓ DISMOUNT'; document.body.appendChild(this.controls);
+    this.controls = document.createElement('div'); this.controls.id = 'bike-controls'; this.controls.textContent = 'RT THROTTLE · LT BRAKE · A BOOST · LB DRIFT · RB CORONA · X RELOAD · PULL LS BACK WHEELIE · D-PAD ↓ DISMOUNT'; document.body.appendChild(this.controls);
     this.drive = document.createElement('div'); this.drive.id = 'bike-drive'; this.drive.innerHTML = '<div class="bike-drive-head"><span>Spectral Drive</span><span id="bike-drive-value">100</span></div><div class="bike-drive-track"><div class="bike-drive-fill"></div></div>'; document.body.appendChild(this.drive);
     this.driveFill = this.drive.querySelector('.bike-drive-fill'); this.driveValue = this.drive.querySelector('#bike-drive-value');
     this.flash = document.createElement('div'); this.flash.id = 'bike-flash'; document.body.appendChild(this.flash);
@@ -87,14 +85,6 @@ export class BikeHUDPrompts {
       if (this._controlTimer <= 0) this.controls.classList.remove('show');
     }
     if (!this.bike.mounted) return;
-
-    // v0.2 injected a launch impulse on every brief loss of ground contact. Trim
-    // that impulse immediately so small seams/undulations read as suspension,
-    // while actual raised ramps still create airtime from their physical height.
-    if (this.bike.airTime > 0 && this.bike.airTime < .18 && this.bike.player?.velocity?.y > .25) {
-      this.bike.player.velocity.y *= .08;
-    }
-
     const energy = Math.max(0, Math.min(100, this.bike.boostEnergy));
     this.driveFill.style.width = `${energy}%`;
     this.driveValue.textContent = Math.round(energy);
