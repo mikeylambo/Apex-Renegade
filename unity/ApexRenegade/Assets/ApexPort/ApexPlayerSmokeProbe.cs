@@ -1,5 +1,8 @@
 using System;
 using System.Collections;
+using Apex.Audio;
+using Apex.Core;
+using Apex.Interaction;
 using Apex.Traversal;
 using UnityEngine;
 
@@ -20,12 +23,11 @@ namespace Apex.Renegade
         private IEnumerator Start()
         {
             DontDestroyOnLoad(gameObject);
-
-            // Give all AfterSceneLoad runtime bootstrap hooks and one normal frame time to finish.
-            for (var i = 0; i < 4; i++) yield return null;
+            for (var i = 0; i < 8; i++) yield return null;
 
             Exception failure = null;
             Material runtimeMaterial = null;
+            RenegadeArsenalController arsenal = null;
             try
             {
                 runtimeMaterial = Resources.Load<Material>("Apex/RuntimeLit");
@@ -35,9 +37,20 @@ namespace Apex.Renegade
                 Require(UnityEngine.Object.FindFirstObjectByType<ApexRenegadePortBootstrap>() != null, "Apex runtime bootstrap is missing.");
                 Require(UnityEngine.Object.FindFirstObjectByType<ApexFirstPersonMotor>() != null, "Renegade player motor is missing.");
                 Require(UnityEngine.Object.FindFirstObjectByType<ApexBikeMotor>() != null, "Renegade bike is missing.");
-                Require(UnityEngine.Object.FindFirstObjectByType<RenegadeWeaponController>() != null, "Corona weapon controller is missing.");
+                arsenal = UnityEngine.Object.FindFirstObjectByType<RenegadeArsenalController>();
+                Require(arsenal != null, "Renegade arsenal is missing.");
+                Require(arsenal.Loadout != null && arsenal.Loadout.Count >= 2, "Corona + Maw loadout did not initialize.");
+                Require(arsenal.Loadout.Find("corona-blaster") != null, "Corona runtime missing.");
+                Require(arsenal.Loadout.Find("maw") != null, "Maw runtime missing.");
+                Require(UnityEngine.Object.FindFirstObjectByType<ApexPortCameraV2>() != null, "Cinematic camera V2 is missing.");
+                Require(UnityEngine.Object.FindFirstObjectByType<ApexPortHudV2>() != null, "HUD V2 is missing.");
+                Require(UnityEngine.Object.FindFirstObjectByType<ApexInteractionScanner>() != null, "Interaction scanner is missing.");
+                Require(UnityEngine.Object.FindFirstObjectByType<RenegadeEscalationDirector>() != null, "Pressure/Refusal director is missing.");
+                Require(UnityEngine.Object.FindFirstObjectByType<RenegadeEncounterSpawner>() != null, "Encounter adapter is missing.");
+                Require(UnityEngine.Object.FindObjectsByType<RenegadePickup>(FindObjectsSortMode.None).Length >= 4, "Pickup layer did not initialize.");
                 Require(UnityEngine.Object.FindFirstObjectByType<Camera>() != null, "Runtime camera is missing.");
                 Require(GameObject.Find("Apex Port World") != null, "Apex Port World is missing.");
+                Require(ApexRuntime.Services.TryGet<ApexAudioService>(out var audio) && audio.HasCue("weapon.maw"), "Apex audio service/cue bank is missing.");
             }
             catch (Exception ex)
             {
@@ -46,7 +59,7 @@ namespace Apex.Renegade
 
             if (failure == null)
             {
-                Debug.Log($"[Apex Player Smoke] PASS // shader={runtimeMaterial.shader.name}");
+                Debug.Log($"[Apex Player Smoke] PASS // shader={runtimeMaterial.shader.name} // weapons={arsenal.Loadout.Count} // build={Application.version}");
                 yield return null;
                 Application.Quit(0);
             }
