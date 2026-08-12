@@ -1,8 +1,11 @@
 using System;
 using System.IO;
+using Apex.Audio;
 using Apex.Combat;
 using Apex.Core;
+using Apex.Encounter;
 using Apex.Input;
+using Apex.Interaction;
 using Apex.Renegade;
 using Apex.Save;
 using Apex.Settings;
@@ -12,7 +15,6 @@ using Apex.World;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace Apex.Editor
 {
@@ -29,18 +31,29 @@ namespace Apex.Editor
                 typeof(ApexRuntime),
                 typeof(ApexSettingsService),
                 typeof(ApexInputService),
+                typeof(ApexAudioService),
                 typeof(ApexPauseService),
                 typeof(ApexSaveService),
                 typeof(HealthComponent),
                 typeof(WeaponStateMachine),
                 typeof(ApexWeaponRuntime),
+                typeof(ApexWeaponLoadout),
                 typeof(ApexAimAssistResolver),
+                typeof(ApexEscalationMeter),
+                typeof(ApexEncounterController),
+                typeof(ApexInteractionScanner),
                 typeof(ApexFirstPersonMotor),
                 typeof(ApexBikeMotor),
                 typeof(ApexRegionVolume),
                 typeof(ApexRenegadePortBootstrap),
-                typeof(RenegadeWeaponController),
-                typeof(ApexPortRuntimeShell)
+                typeof(RenegadeArsenalController),
+                typeof(RenegadeEscalationDirector),
+                typeof(RenegadeEncounterSpawner),
+                typeof(RenegadePickup),
+                typeof(ApexPortCameraV2),
+                typeof(ApexPortHudV2),
+                typeof(ApexPortRuntimeShell),
+                typeof(ApexPlayerSmokeProbe)
             };
 
             foreach (var type in required)
@@ -53,7 +66,7 @@ namespace Apex.Editor
             if (runtimeMaterial == null || runtimeMaterial.shader == null)
                 throw new InvalidOperationException($"Apex runtime material resource is missing or invalid: {RuntimeMaterialPath}");
 
-            Debug.Log($"[Apex Batch] Foundation validation passed. Unity {Application.unityVersion}. Modules: {required.Length}. Runtime shader: {runtimeMaterial.shader.name}.");
+            Debug.Log($"[Apex Batch] Sprint validation passed. Unity {Application.unityVersion}. Modules: {required.Length}. Runtime shader: {runtimeMaterial.shader.name}.");
         }
 
         [MenuItem("Apex/Port/Create Bootstrap Scene")]
@@ -84,10 +97,7 @@ namespace Apex.Editor
                 material = new Material(shader) { name = "Apex Runtime Lit" };
                 AssetDatabase.CreateAsset(material, RuntimeMaterialPath);
             }
-            else
-            {
-                material.shader = shader;
-            }
+            else material.shader = shader;
 
             material.color = Color.white;
             if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", 0.25f);
@@ -116,7 +126,7 @@ namespace Apex.Editor
 
             PlayerSettings.productName = "Apex Renegade";
             PlayerSettings.companyName = "Mikey Lambo";
-            PlayerSettings.bundleVersion = "0.1.1-port";
+            PlayerSettings.bundleVersion = "0.2.0-port";
 
             var output = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Builds", "Windows", "ApexRenegade.exe"));
             Directory.CreateDirectory(Path.GetDirectoryName(output) ?? "Builds/Windows");
