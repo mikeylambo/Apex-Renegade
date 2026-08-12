@@ -6,11 +6,22 @@ namespace Apex.Renegade
     internal static class ApexPortMaterialFactory
     {
         private const string RuntimeLitResource = "Apex/RuntimeLit";
+        private static Material _template;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void PreloadRuntimeMaterial()
+        {
+            _template = Resources.Load<Material>(RuntimeLitResource);
+            if (_template == null || _template.shader == null)
+                Debug.LogError("[Apex Materials] RuntimeLit resource failed to preload before scene bootstrap.");
+            else
+                Debug.Log($"[Apex Materials] Preloaded runtime shader: {_template.shader.name}");
+        }
 
         public static Material Create(string name, Color color, float metallic, Color emission = default)
         {
             Material material;
-            var template = Resources.Load<Material>(RuntimeLitResource);
+            var template = _template != null ? _template : Resources.Load<Material>(RuntimeLitResource);
             if (template != null)
             {
                 material = new Material(template);
