@@ -1,0 +1,6 @@
+{
+  "name": "Apex.Traversal",
+  "rootNamespace": "Apex.Traversal",
+  "references": ["Apex.Core", "Apex.Input", "Apex.Settings"],
+  "autoReferenced": true
+}
