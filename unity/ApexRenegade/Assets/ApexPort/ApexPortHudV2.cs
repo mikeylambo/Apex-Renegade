@@ -21,6 +21,8 @@ namespace Apex.Renegade
         private RenegadeEscalationDirector _escalation;
         private ApexTelemetry _telemetry;
         private ApexSettingsService _settings;
+        private ApexPerformanceBudget _performance;
+        private ApexWorldStreamingController _streaming;
         private GUIStyle _small;
         private GUIStyle _large;
         private GUIStyle _damage;
@@ -54,6 +56,9 @@ namespace Apex.Renegade
         private void Update()
         {
             if (Keyboard.current?.f8Key.wasPressedThisFrame == true) _debug = !_debug;
+            if (!_debug) return;
+            _performance ??= Object.FindFirstObjectByType<ApexPerformanceBudget>();
+            _streaming ??= Object.FindFirstObjectByType<ApexWorldStreamingController>();
         }
 
         private void OnGUI()
@@ -117,11 +122,17 @@ namespace Apex.Renegade
 
             if (_debug && _telemetry != null)
             {
-                GUI.color = new Color(0f, 0f, 0f, 0.68f);
-                GUI.DrawTexture(new Rect(w - 260f, 20f, 235f, 120f), Texture2D.whiteTexture);
+                const float panelWidth = 310f;
+                const float panelHeight = 205f;
+                GUI.color = new Color(0f, 0f, 0f, 0.72f);
+                GUI.DrawTexture(new Rect(w - panelWidth - 24f, 20f, panelWidth, panelHeight), Texture2D.whiteTexture);
                 GUI.color = Color.white;
-                GUI.Label(new Rect(w - 245f, 30f, 210f, 100f),
-                    $"F8 // APEX DIAGNOSTICS\nFPS  {_telemetry.SmoothedFps:0.0}\nFRAME  {_telemetry.SmoothedFrameMs:0.00} ms\nBIKE  {(_bike?.PlanarSpeed ?? 0f):0.0} m/s\nUNITY  {Application.unityVersion}", _small);
+                var state = _performance != null ? _performance.State.ToString().ToUpperInvariant() : "BOOTING";
+                var loaded = _streaming != null ? $"{_streaming.LoadedCount}/{_streaming.Cells.Count}" : "—";
+                var commit = ApexBuildInfo.ShortCommit;
+                var run = ApexBuildInfo.Value("run");
+                GUI.Label(new Rect(w - panelWidth - 10f, 30f, panelWidth - 28f, panelHeight - 18f),
+                    $"F8 // APEX DIAGNOSTICS\nFPS      {_telemetry.SmoothedFps:0.0}\nFRAME    {_telemetry.SmoothedFrameMs:0.00} ms\nBUDGET   {state}\nSTREAM   {loaded} cells\nBIKE     {(_bike?.PlanarSpeed ?? 0f):0.0} m/s\nREGION   {_regions?.ActiveRegion}\nUNITY    {Application.unityVersion}\nBUILD    {Application.version}\nCOMMIT   {commit}\nRUN      {run}", _small);
             }
         }
 
