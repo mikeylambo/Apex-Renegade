@@ -19,6 +19,8 @@ namespace Apex.Editor
     public static class ApexBatch
     {
         private const string ScenePath = "Assets/ApexPort/Scenes/PortBootstrap.unity";
+        private const string RuntimeMaterialDirectory = "Assets/ApexPort/Resources/Apex";
+        private const string RuntimeMaterialPath = RuntimeMaterialDirectory + "/RuntimeLit.mat";
 
         public static void ValidateProject()
         {
@@ -47,12 +49,17 @@ namespace Apex.Editor
             if (AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath) == null)
                 throw new InvalidOperationException($"Generated Apex port scene is missing: {ScenePath}");
 
-            Debug.Log($"[Apex Batch] Foundation validation passed. Unity {Application.unityVersion}. Modules: {required.Length}.");
+            var runtimeMaterial = AssetDatabase.LoadAssetAtPath<Material>(RuntimeMaterialPath);
+            if (runtimeMaterial == null || runtimeMaterial.shader == null)
+                throw new InvalidOperationException($"Apex runtime material resource is missing or invalid: {RuntimeMaterialPath}");
+
+            Debug.Log($"[Apex Batch] Foundation validation passed. Unity {Application.unityVersion}. Modules: {required.Length}. Runtime shader: {runtimeMaterial.shader.name}.");
         }
 
         [MenuItem("Apex/Port/Create Bootstrap Scene")]
         public static void CreatePortScene()
         {
+            EnsureRuntimeMaterialResource();
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath) ?? "Assets/ApexPort/Scenes");
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var marker = new GameObject("Apex Port Scene // generated; runtime bootstrap builds the world");
@@ -62,6 +69,38 @@ namespace Apex.Editor
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             Debug.Log($"[Apex Batch] Created {ScenePath} and installed it as build scene 0.");
+        }
+
+        private static void EnsureRuntimeMaterialResource()
+        {
+            Directory.CreateDirectory(RuntimeMaterialDirectory);
+            var shader = Shader.Find("Standard") ?? Shader.Find("Unlit/Color");
+            if (shader == null)
+                throw new InvalidOperationException("Neither Standard nor Unlit/Color shader is available in the Unity Editor.");
+
+            var material = AssetDatabase.LoadAssetAtPath<Material>(RuntimeMaterialPath);
+            if (material == null)
+            {
+                material = new Material(shader) { name = "Apex Runtime Lit" };
+                AssetDatabase.CreateAsset(material, RuntimeMaterialPath);
+            }
+            else
+            {
+                material.shader = shader;
+            }
+
+            material.color = Color.white;
+            if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", 0.25f);
+            if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", 0.40f);
+            if (material.HasProperty("_EmissionColor"))
+            {
+                material.EnableKeyword("_EMISSION");
+                material.SetColor("_EmissionColor", Color.black);
+            }
+            material.enableInstancing = true;
+            EditorUtility.SetDirty(material);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.ImportAsset(RuntimeMaterialPath, ImportAssetOptions.ForceUpdate);
         }
 
         public static void CreateAndValidate()
@@ -77,7 +116,7 @@ namespace Apex.Editor
 
             PlayerSettings.productName = "Apex Renegade";
             PlayerSettings.companyName = "Mikey Lambo";
-            PlayerSettings.bundleVersion = "0.1.0-port";
+            PlayerSettings.bundleVersion = "0.1.1-port";
 
             var output = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Builds", "Windows", "ApexRenegade.exe"));
             Directory.CreateDirectory(Path.GetDirectoryName(output) ?? "Builds/Windows");
