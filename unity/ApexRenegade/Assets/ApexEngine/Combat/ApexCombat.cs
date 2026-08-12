@@ -148,6 +148,16 @@ namespace Apex.Combat
 
         public void AddReserve(int amount) => Reserve = Mathf.Max(0, Reserve + amount);
 
+        public void RestoreAmmo(int magazine, int reserve)
+        {
+            Magazine = Mathf.Clamp(magazine, 0, MagazineSize);
+            Reserve = Mathf.Max(0, reserve);
+            _cooldown = 0f;
+            TimeInState = 0f;
+            if (State != WeaponState.Holstered)
+                State = Magazine > 0 ? WeaponState.Ready : WeaponState.Empty;
+        }
+
         private void FinishReload()
         {
             var needed = MagazineSize - Magazine;
