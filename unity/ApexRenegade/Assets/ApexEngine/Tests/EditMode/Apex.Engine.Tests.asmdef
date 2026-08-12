@@ -1,0 +1,8 @@
+{
+  "name": "Apex.Engine.Tests",
+  "rootNamespace": "Apex.Tests",
+  "references": ["Apex.Core", "Apex.Settings", "Apex.Combat"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "autoReferenced": false
+}
