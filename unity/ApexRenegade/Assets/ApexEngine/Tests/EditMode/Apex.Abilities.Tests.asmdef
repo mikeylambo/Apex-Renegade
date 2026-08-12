@@ -1,8 +1,0 @@
-{
-  "name": "Apex.Abilities.Tests",
-  "rootNamespace": "Apex.Tests.Abilities",
-  "references": ["Apex.Abilities"],
-  "includePlatforms": ["Editor"],
-  "optionalUnityReferences": ["TestAssemblies"],
-  "autoReferenced": false
-}
