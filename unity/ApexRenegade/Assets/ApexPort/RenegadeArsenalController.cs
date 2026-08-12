@@ -14,6 +14,7 @@ namespace Apex.Renegade
         private ApexInputService _input;
         private GameObject _source;
         private HealthComponent _sourceHealth;
+        private ApexFirstPersonMotor _sourceMotor;
         private ApexBikeMotor _bike;
         private ApexAudioService _audio;
         private ApexWeaponLoadout _loadout;
@@ -21,7 +22,7 @@ namespace Apex.Renegade
         private WeaponDefinition _mawDefinition;
         private ApexWeaponRuntime _corona;
         private readonly ApexAimAssistResolver _aimAssist = new();
-        private readonly List<ApexPortEnemy> _targets = new();
+        private readonly List<IAimAssistTarget> _targets = new();
         private readonly Dictionary<ApexWeaponRuntime, Transform> _viewModels = new();
         private readonly Dictionary<ApexWeaponRuntime, Vector3> _viewModelBases = new();
         private Vector3 _recoilPosition;
@@ -50,6 +51,7 @@ namespace Apex.Renegade
             _input = input;
             _source = source;
             _sourceHealth = source != null ? source.GetComponent<HealthComponent>() : null;
+            _sourceMotor = source != null ? source.GetComponent<ApexFirstPersonMotor>() : null;
             _bike = bike;
             _audio = audio;
 
@@ -62,11 +64,17 @@ namespace Apex.Renegade
 
             _corona = new ApexWeaponRuntime(_coronaDefinition);
             var maw = new ApexWeaponRuntime(_mawDefinition);
+            _corona.DryFired += () => _audio?.Play("weapon.dry", 0.62f);
+            maw.DryFired += () => _audio?.Play("weapon.dry", 0.72f, ApexAudioBus.Sfx, 0.78f);
+
             _loadout = new ApexWeaponLoadout();
             _loadout.Add(_corona);
             _loadout.Add(maw, false);
             _loadout.WeaponChanged += (_, weapon) =>
             {
+                _audio?.Play("ui.confirm", 0.42f, ApexAudioBus.Sfx, weapon.Definition.weaponId == "maw" ? 0.82f : 1.08f);
+                _recoilPosition = Vector3.zero;
+                _recoilRotation = Vector3.zero;
                 SyncViewModels();
                 WeaponChanged?.Invoke(weapon);
             };
@@ -102,18 +110,18 @@ namespace Apex.Renegade
             return d;
         }
 
-        public void RegisterTarget(ApexPortEnemy enemy)
+        public void RegisterTarget(IAimAssistTarget target)
         {
-            if (enemy == null || _targets.Contains(enemy)) return;
-            _targets.Add(enemy);
-            _aimAssist.Register(enemy);
+            if (target == null || _targets.Contains(target)) return;
+            _targets.Add(target);
+            _aimAssist.Register(target);
         }
 
-        public void UnregisterTarget(ApexPortEnemy enemy)
+        public void UnregisterTarget(IAimAssistTarget target)
         {
-            if (enemy == null) return;
-            _targets.Remove(enemy);
-            _aimAssist.Unregister(enemy);
+            if (target == null) return;
+            _targets.Remove(target);
+            _aimAssist.Unregister(target);
         }
 
         public int AddAmmo(string weaponId, int amount) => _loadout?.AddAmmo(weaponId, amount) ?? 0;
@@ -147,13 +155,18 @@ namespace Apex.Renegade
             if (weapon == null) return;
             var fireAction = mounted ? _input.BikeFire : _input.Fire;
             var wantsFire = weapon.Definition.automatic ? _input.Held(fireAction) : _input.Pressed(fireAction);
-            if (wantsFire && weapon.TryFire()) FireShot(weapon);
+            if (wantsFire) weapon.TryFire();
             if (_input.Pressed(_input.Reload))
             {
-                if (weapon.TryReload()) _audio?.Play("weapon.reload", 0.6f);
+                if (weapon.TryReload()) _audio?.Play("weapon.reload", 0.6f, ApexAudioBus.Sfx, weapon.Definition.weaponId == "maw" ? 0.82f : 1f);
             }
 
             UpdateViewModel(dt);
+        }
+
+        private void OnEnable()
+        {
+            // Weapon runtime events are connected lazily because Configure owns the definitions.
         }
 
         private void FireShot(ApexWeaponRuntime weapon)
@@ -183,9 +196,9 @@ namespace Apex.Renegade
                 if (!Physics.Raycast(origin, direction, out var hit, d.range, ~0, QueryTriggerInteraction.Ignore)) continue;
 
                 var damageable = hit.collider.GetComponentInParent<HealthComponent>();
-                var enemy = hit.collider.GetComponentInParent<ApexPortEnemy>();
+                var reactive = hit.collider.GetComponentInParent<IRenegadeHitReactive>();
                 var wasAlive = damageable != null && damageable.IsAlive;
-                if (damageable != null)
+                if (damageable != null && damageable != _sourceHealth)
                 {
                     damageable.ApplyDamage(new DamagePayload(d.damage, hit.point, direction, d.damageKind, _source));
                     var killed = wasAlive && !damageable.IsAlive;
@@ -196,7 +209,7 @@ namespace Apex.Renegade
 
                 if (hit.rigidbody != null && !hit.rigidbody.isKinematic)
                     hit.rigidbody.AddForceAtPosition(direction * d.hitImpulse, hit.point, ForceMode.Impulse);
-                if (enemy != null) enemy.NotifyHit(hit.point, direction);
+                reactive?.NotifyHit(hit.point, direction);
             }
 
             if (anyHit)
@@ -241,6 +254,7 @@ namespace Apex.Renegade
             root.localRotation = Quaternion.Euler(euler);
             _viewModels[weapon] = root;
             _viewModelBases[weapon] = position;
+            weapon.Fired += FireShot;
             return root;
         }
 
@@ -258,9 +272,14 @@ namespace Apex.Renegade
             _recoilPosition = Vector3.Lerp(_recoilPosition, Vector3.zero, 1f - Mathf.Exp(-18f * dt));
             _recoilRotation = Vector3.Lerp(_recoilRotation, Vector3.zero, 1f - Mathf.Exp(-15f * dt));
             var basePosition = _viewModelBases[weapon];
+            var speed = _sourceMotor != null ? Vector3.ProjectOnPlane(_sourceMotor.Velocity, Vector3.up).magnitude : 0f;
+            var move01 = Mathf.Clamp01(speed / 8f);
+            var bobPhase = Time.time * Mathf.Lerp(5.5f, 9.5f, move01);
+            var bob = IsAiming ? Vector3.zero : new Vector3(Mathf.Sin(bobPhase) * 0.012f, Mathf.Abs(Mathf.Cos(bobPhase)) * 0.010f, 0f) * move01;
             var ads = IsAiming ? new Vector3(-basePosition.x, -basePosition.y - 0.02f, -0.08f) : Vector3.zero;
-            root.localPosition = Vector3.Lerp(root.localPosition, basePosition + ads + _recoilPosition, 1f - Mathf.Exp(-(IsAiming ? 16f : 12f) * dt));
-            root.localRotation = Quaternion.Slerp(root.localRotation, Quaternion.Euler(_recoilRotation + (IsAiming ? Vector3.zero : new Vector3(1.5f, -4f, 0f))), 1f - Mathf.Exp(-16f * dt));
+            root.localPosition = Vector3.Lerp(root.localPosition, basePosition + ads + bob + _recoilPosition, 1f - Mathf.Exp(-(IsAiming ? 16f : 12f) * dt));
+            var bobRoll = IsAiming ? 0f : Mathf.Sin(bobPhase * 0.5f) * 0.55f * move01;
+            root.localRotation = Quaternion.Slerp(root.localRotation, Quaternion.Euler(_recoilRotation + (IsAiming ? Vector3.zero : new Vector3(1.5f, -4f, bobRoll))), 1f - Mathf.Exp(-16f * dt));
         }
 
         private static void CreatePart(Transform parent, string name, Vector3 localPosition, Vector3 scale, Material material, Vector3 euler = default)
@@ -277,6 +296,8 @@ namespace Apex.Renegade
 
         private void OnDestroy()
         {
+            foreach (var pair in _viewModels)
+                if (pair.Key != null) pair.Key.Fired -= FireShot;
             if (_coronaDefinition != null) Destroy(_coronaDefinition);
             if (_mawDefinition != null) Destroy(_mawDefinition);
         }
