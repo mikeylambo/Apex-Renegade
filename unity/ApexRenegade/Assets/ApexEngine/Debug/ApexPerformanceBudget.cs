@@ -32,7 +32,7 @@ namespace Apex.Debugging
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void EnsureService()
         {
-            if (Object.FindFirstObjectByType<ApexPerformanceBudget>() != null) return;
+            if (UnityEngine.Object.FindFirstObjectByType<ApexPerformanceBudget>() != null) return;
             new GameObject("Apex Performance Budget").AddComponent<ApexPerformanceBudget>();
         }
 
@@ -116,7 +116,7 @@ namespace Apex.Debugging
 
         private static void Broadcast(ApexPerformanceState state)
         {
-            var behaviours = Object.FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            var behaviours = UnityEngine.Object.FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             for (var i = 0; i < behaviours.Length; i++)
                 if (behaviours[i] is IApexAdaptiveBudgetConsumer consumer)
                     consumer.OnPerformanceStateChanged(state);
