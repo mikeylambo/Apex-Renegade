@@ -1,7 +1,7 @@
 {
   "name": "Apex.Engine.Tests",
   "rootNamespace": "Apex.Tests",
-  "references": ["Apex.Core", "Apex.Settings", "Apex.Input", "Apex.Combat", "Apex.AI", "Apex.Camera", "Apex.Save", "Apex.Encounter", "Unity.InputSystem"],
+  "references": ["Apex.Core", "Apex.Settings", "Apex.Input", "Apex.Combat", "Apex.AI", "Apex.Camera", "Apex.Save", "Apex.Encounter", "Apex.Abilities", "Unity.InputSystem"],
   "includePlatforms": ["Editor"],
   "optionalUnityReferences": ["TestAssemblies"],
   "autoReferenced": false
