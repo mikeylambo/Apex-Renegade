@@ -13,6 +13,7 @@ namespace Apex.Renegade
         private ApexInputService _input;
         private ApexSettingsService _settings;
         private ApexPauseService _pause;
+        private RenegadeWeaponController _weapon;
         private GUIStyle _title;
         private GUIStyle _label;
         private GUIStyle _value;
@@ -40,6 +41,7 @@ namespace Apex.Renegade
                 _pause.Initialize(ApexRuntime.Services);
             }
 
+            _weapon = Object.FindFirstObjectByType<RenegadeWeaponController>();
             _pause.PauseChanged += OnPauseChanged;
             _ready = true;
         }
@@ -59,6 +61,8 @@ namespace Apex.Renegade
         {
             Cursor.lockState = paused ? CursorLockMode.None : CursorLockMode.Locked;
             Cursor.visible = paused;
+            _weapon ??= Object.FindFirstObjectByType<RenegadeWeaponController>();
+            if (_weapon != null) _weapon.enabled = !paused;
         }
 
         private void OnGUI()
