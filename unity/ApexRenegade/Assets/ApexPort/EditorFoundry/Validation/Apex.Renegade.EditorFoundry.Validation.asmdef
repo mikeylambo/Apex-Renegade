@@ -1,0 +1,7 @@
+{
+  "name": "Apex.Renegade.EditorFoundry.Validation",
+  "rootNamespace": "Apex.Renegade.EditorFoundry.Validation",
+  "references": ["Apex.Renegade.EditorFoundry", "Apex.Engine.Editor", "Apex.World"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}
