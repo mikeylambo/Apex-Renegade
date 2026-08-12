@@ -20,7 +20,7 @@ namespace Apex.Save
     [Serializable]
     public sealed class ApexSaveData
     {
-        public int version = 1;
+        public int version = 2;
         public ApexCheckpointData checkpoint = new();
         public string gamePayloadJson = "{}";
     }
@@ -32,6 +32,7 @@ namespace Apex.Save
         public ApexSaveData Data { get; private set; } = new();
         public bool HasCheckpoint => Data?.checkpoint != null && Data.checkpoint.valid;
         public event Action<ApexCheckpointData> CheckpointChanged;
+        public event Action GamePayloadChanged;
 
         public void Initialize(ApexServices services)
         {
@@ -69,6 +70,39 @@ namespace Apex.Save
             return true;
         }
 
+        public void SetGamePayload<T>(T payload, bool saveImmediately = true) where T : class
+        {
+            if (payload == null) throw new ArgumentNullException(nameof(payload));
+            Data.gamePayloadJson = JsonUtility.ToJson(payload);
+            GamePayloadChanged?.Invoke();
+            if (saveImmediately) Save();
+        }
+
+        public bool TryGetGamePayload<T>(out T payload) where T : class, new()
+        {
+            payload = new T();
+            var json = Data?.gamePayloadJson;
+            if (string.IsNullOrWhiteSpace(json) || json == "{}") return false;
+            try
+            {
+                payload = JsonUtility.FromJson<T>(json) ?? new T();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[Apex.Save] Game payload parse failed for {typeof(T).Name}: {ex.Message}");
+                payload = new T();
+                return false;
+            }
+        }
+
+        public void ClearGamePayload(bool saveImmediately = true)
+        {
+            Data.gamePayloadJson = "{}";
+            GamePayloadChanged?.Invoke();
+            if (saveImmediately) Save();
+        }
+
         public void Save()
         {
             try
@@ -88,6 +122,8 @@ namespace Apex.Save
             {
                 Data = File.Exists(_path) ? JsonUtility.FromJson<ApexSaveData>(File.ReadAllText(_path)) ?? new ApexSaveData() : new ApexSaveData();
                 Data.checkpoint ??= new ApexCheckpointData();
+                Data.gamePayloadJson ??= "{}";
+                Data.version = Mathf.Max(2, Data.version);
             }
             catch (Exception ex)
             {
