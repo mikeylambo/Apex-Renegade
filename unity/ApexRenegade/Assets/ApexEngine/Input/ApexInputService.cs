@@ -14,6 +14,7 @@ namespace Apex.Input
 
         public InputActionAsset Asset { get; private set; }
         public InputActionMap Gameplay { get; private set; }
+        public InputActionMap UI { get; private set; }
         public InputAction Move { get; private set; }
         public InputAction Look { get; private set; }
         public InputAction Fire { get; private set; }
@@ -33,6 +34,9 @@ namespace Apex.Input
         public InputAction WeaponNext { get; private set; }
         public InputAction WeaponPrevious { get; private set; }
         public InputAction Pause { get; private set; }
+        public InputAction UINavigate { get; private set; }
+        public InputAction UISubmit { get; private set; }
+        public InputAction UICancel { get; private set; }
         public bool UsingGamepad { get; private set; }
 
         public void Initialize(ApexServices services)
@@ -41,6 +45,7 @@ namespace Apex.Input
             BuildActions();
             LoadBindingOverrides();
             Gameplay.Enable();
+            UI.Enable();
             services.Register(this);
         }
 
@@ -60,28 +65,39 @@ namespace Apex.Input
             Look.AddBinding("<Mouse>/delta");
             Look.AddBinding("<Gamepad>/rightStick");
 
-            Fire = AddButton("Fire", "<Mouse>/leftButton", "<Gamepad>/rightTrigger");
-            Aim = AddButton("Aim", "<Mouse>/rightButton", "<Gamepad>/leftTrigger");
-            Jump = AddButton("Jump", "<Keyboard>/space", "<Gamepad>/buttonSouth");
-            Sprint = AddButton("Sprint", "<Keyboard>/leftShift", "<Gamepad>/leftStickPress");
-            Crouch = AddButton("Crouch", "<Keyboard>/leftCtrl", "<Gamepad>/buttonEast");
-            Reload = AddButton("Reload", "<Keyboard>/r", "<Gamepad>/buttonWest");
-            Interact = AddButton("Interact", "<Keyboard>/e", "<Gamepad>/buttonNorth");
-            Bike = AddButton("Bike", "<Keyboard>/v", "<Gamepad>/dpad/down");
-            Drift = AddButton("Drift", "<Keyboard>/q", "<Gamepad>/leftShoulder");
-            Boost = AddButton("Boost", "<Keyboard>/space", "<Gamepad>/buttonSouth");
-            BikeFire = AddButton("BikeFire", "<Keyboard>/f", "<Gamepad>/rightShoulder");
-            Dash = AddButton("Dash", "<Keyboard>/leftAlt", "<Gamepad>/leftShoulder");
-            Surge = AddButton("Surge", "<Keyboard>/x", "<Gamepad>/rightShoulder");
-            Flight = AddButton("Flight", "<Keyboard>/g", "<Gamepad>/dpad/up");
-            WeaponNext = AddButton("WeaponNext", "<Keyboard>/2", "<Gamepad>/dpad/right");
-            WeaponPrevious = AddButton("WeaponPrevious", "<Keyboard>/1", "<Gamepad>/dpad/left");
-            Pause = AddButton("Pause", "<Keyboard>/escape", "<Gamepad>/start");
+            Fire = AddButton(Gameplay, "Fire", "<Mouse>/leftButton", "<Gamepad>/rightTrigger");
+            Aim = AddButton(Gameplay, "Aim", "<Mouse>/rightButton", "<Gamepad>/leftTrigger");
+            Jump = AddButton(Gameplay, "Jump", "<Keyboard>/space", "<Gamepad>/buttonSouth");
+            Sprint = AddButton(Gameplay, "Sprint", "<Keyboard>/leftShift", "<Gamepad>/leftStickPress");
+            Crouch = AddButton(Gameplay, "Crouch", "<Keyboard>/leftCtrl", "<Gamepad>/buttonEast");
+            Reload = AddButton(Gameplay, "Reload", "<Keyboard>/r", "<Gamepad>/buttonWest");
+            Interact = AddButton(Gameplay, "Interact", "<Keyboard>/e", "<Gamepad>/buttonNorth");
+            Bike = AddButton(Gameplay, "Bike", "<Keyboard>/v", "<Gamepad>/dpad/down");
+            Drift = AddButton(Gameplay, "Drift", "<Keyboard>/q", "<Gamepad>/leftShoulder");
+            Boost = AddButton(Gameplay, "Boost", "<Keyboard>/space", "<Gamepad>/buttonSouth");
+            BikeFire = AddButton(Gameplay, "BikeFire", "<Keyboard>/f", "<Gamepad>/rightShoulder");
+            Dash = AddButton(Gameplay, "Dash", "<Keyboard>/leftAlt", "<Gamepad>/leftShoulder");
+            Surge = AddButton(Gameplay, "Surge", "<Keyboard>/x", "<Gamepad>/rightShoulder");
+            Flight = AddButton(Gameplay, "Flight", "<Keyboard>/g", "<Gamepad>/dpad/up");
+            WeaponNext = AddButton(Gameplay, "WeaponNext", "<Keyboard>/2", "<Gamepad>/dpad/right");
+            WeaponPrevious = AddButton(Gameplay, "WeaponPrevious", "<Keyboard>/1", "<Gamepad>/dpad/left");
+            Pause = AddButton(Gameplay, "Pause", "<Keyboard>/escape", "<Gamepad>/start");
+
+            UI = new InputActionMap("UI");
+            Asset.AddActionMap(UI);
+            UINavigate = UI.AddAction("Navigate", InputActionType.Value, expectedControlLayout: "Vector2");
+            UINavigate.AddCompositeBinding("2DVector")
+                .With("Up", "<Keyboard>/upArrow").With("Down", "<Keyboard>/downArrow")
+                .With("Left", "<Keyboard>/leftArrow").With("Right", "<Keyboard>/rightArrow");
+            UINavigate.AddBinding("<Gamepad>/dpad");
+            UINavigate.AddBinding("<Gamepad>/leftStick");
+            UISubmit = AddButton(UI, "Submit", "<Keyboard>/enter", "<Gamepad>/buttonSouth");
+            UICancel = AddButton(UI, "Cancel", "<Keyboard>/escape", "<Gamepad>/buttonEast");
         }
 
-        private InputAction AddButton(string name, string keyboardMouse, string gamepad)
+        private static InputAction AddButton(InputActionMap map, string name, string keyboardMouse, string gamepad)
         {
-            var action = Gameplay.AddAction(name, InputActionType.Button);
+            var action = map.AddAction(name, InputActionType.Button);
             action.AddBinding(keyboardMouse);
             action.AddBinding(gamepad);
             return action;
@@ -147,9 +163,40 @@ namespace Apex.Input
         public bool Pressed(InputAction action) => action != null && action.WasPressedThisFrame();
         public bool Held(InputAction action) => action != null && action.IsPressed();
 
+        public int FindBindingIndex(InputAction action, bool gamepad)
+        {
+            if (action == null) return -1;
+            var token = gamepad ? "<Gamepad>" : "<Keyboard>";
+            for (var i = 0; i < action.bindings.Count; i++)
+            {
+                var binding = action.bindings[i];
+                var path = string.IsNullOrWhiteSpace(binding.overridePath) ? binding.path : binding.overridePath;
+                if (!string.IsNullOrWhiteSpace(path) && path.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0)
+                    return i;
+            }
+            return -1;
+        }
+
+        public string BindingDisplay(InputAction action, bool gamepad)
+        {
+            var index = FindBindingIndex(action, gamepad);
+            return index >= 0 ? action.GetBindingDisplayString(index) : "—";
+        }
+
+        public void StartInteractiveRebind(InputAction action, bool gamepad, Action<bool> completed)
+        {
+            var bindingIndex = FindBindingIndex(action, gamepad);
+            if (bindingIndex < 0)
+            {
+                completed?.Invoke(false);
+                return;
+            }
+            StartInteractiveRebind(action, bindingIndex, completed);
+        }
+
         public void StartInteractiveRebind(InputAction action, int bindingIndex, Action<bool> completed)
         {
-            if (action == null)
+            if (action == null || bindingIndex < 0 || bindingIndex >= action.bindings.Count)
             {
                 completed?.Invoke(false);
                 return;
@@ -178,11 +225,13 @@ namespace Apex.Input
         {
             Asset.RemoveAllBindingOverrides();
             PlayerPrefs.DeleteKey(BindingPrefsKey);
+            PlayerPrefs.Save();
         }
 
         public void Shutdown()
         {
             Gameplay?.Disable();
+            UI?.Disable();
             if (Asset != null) Destroy(Asset);
         }
     }
