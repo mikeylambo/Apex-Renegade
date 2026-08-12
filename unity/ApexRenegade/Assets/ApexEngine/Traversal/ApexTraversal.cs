@@ -23,77 +23,214 @@ namespace Apex.Traversal
         [SerializeField] private float moveSpeed = 5.25f;
         [SerializeField] private float sprintSpeed = 7.9f;
         [SerializeField] private float crouchSpeed = 3.4f;
+        [SerializeField] private float groundAcceleration = 30f;
+        [SerializeField] private float groundDeceleration = 36f;
+        [SerializeField] private float airAcceleration = 8.5f;
         [SerializeField] private float jumpSpeed = 7.2f;
         [SerializeField] private float gravity = 24f;
         [SerializeField] private float dashImpulse = 8.5f;
+        [SerializeField] private float slideEntrySpeed = 8.8f;
+        [SerializeField] private float slideDuration = 0.72f;
 
         private CharacterController _controller;
+        private float _standingHeight;
+        private Vector3 _standingCenter;
+        private float _standingViewY;
         private float _verticalVelocity;
         private float _yaw;
         private float _pitch;
+        private Vector3 _planarVelocity;
         private Vector3 _dashVelocity;
+        private Vector3 _slideVelocity;
         private float _dashCooldown;
+        private float _slideTimer;
+        private float _slideCooldown;
+        private bool _wasGrounded;
+        private float _peakFallSpeed;
+        private float _stepDistance;
+        private Vector3 _lastStepPosition;
+
         public bool MovementEnabled { get; private set; } = true;
         public Transform View => view;
         public Vector3 Velocity { get; private set; }
         public bool IsCrouching { get; private set; }
+        public bool IsSliding => _slideTimer > 0f;
+        public bool IsGrounded => _controller != null && _controller.enabled && _controller.isGrounded;
+        public bool IsSprinting { get; private set; }
+        public float HorizontalSpeed => Vector3.ProjectOnPlane(Velocity, Vector3.up).magnitude;
+
+        public event Action Jumped;
+        public event Action<float> Landed;
+        public event Action SlideStarted;
+        public event Action DashStarted;
+        public event Action<float> Footstep;
 
         private void Awake()
         {
             _controller = GetComponent<CharacterController>();
+            _standingHeight = _controller.height;
+            _standingCenter = _controller.center;
             if (view == null)
             {
                 var camera = GetComponentInChildren<Camera>();
                 if (camera != null) view = camera.transform;
             }
+            _standingViewY = view != null ? view.localPosition.y : 1.65f;
             _yaw = transform.eulerAngles.y;
+            _lastStepPosition = transform.position;
         }
 
-        public void SetView(Transform target) => view = target;
+        public void SetView(Transform target)
+        {
+            view = target;
+            if (view != null) _standingViewY = view.localPosition.y;
+        }
 
         public void SetMountedState(bool mounted)
         {
             MovementEnabled = !mounted;
             if (_controller != null) _controller.enabled = !mounted;
             _verticalVelocity = 0f;
+            _planarVelocity = Vector3.zero;
             _dashVelocity = Vector3.zero;
+            _slideVelocity = Vector3.zero;
+            _slideTimer = 0f;
+            IsSprinting = false;
         }
 
         private void Update()
         {
-            if (Time.timeScale <= 0f || Input == null || !MovementEnabled) return;
+            if (Time.timeScale <= 0f || Input == null || !MovementEnabled || _controller == null || !_controller.enabled) return;
             var dt = Time.deltaTime;
             _dashCooldown = Mathf.Max(0f, _dashCooldown - dt);
+            _slideCooldown = Mathf.Max(0f, _slideCooldown - dt);
+
             var look = Input.ReadLook(dt, Input.Held(Input.Aim));
             _yaw += look.x;
             _pitch = Mathf.Clamp(_pitch - look.y, -88f, 88f);
             transform.rotation = Quaternion.Euler(0f, _yaw, 0f);
             if (view != null) view.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
 
+            var grounded = _controller.isGrounded;
+            if (grounded && !_wasGrounded)
+            {
+                var impact = Mathf.Abs(Mathf.Min(0f, _peakFallSpeed));
+                if (impact > 2.5f) Landed?.Invoke(impact);
+                _peakFallSpeed = 0f;
+            }
+
             var move = Input.ReadMove();
             var wish = transform.forward * move.y + transform.right * move.x;
             if (wish.sqrMagnitude > 1f) wish.Normalize();
 
-            IsCrouching = Input.Held(Input.Crouch);
-            var speed = IsCrouching ? crouchSpeed : (Input.Held(Input.Sprint) ? sprintSpeed : moveSpeed);
+            var crouchHeld = Input.Held(Input.Crouch);
+            IsSprinting = grounded && !crouchHeld && !IsSliding && Input.Held(Input.Sprint) && move.y > 0.12f;
 
-            if (_controller.isGrounded)
+            if (grounded && Input.Pressed(Input.Crouch) && !IsSliding && _slideCooldown <= 0f && (IsSprinting || _planarVelocity.magnitude > 6.4f))
+                BeginSlide(wish);
+
+            if (IsSliding)
             {
-                _verticalVelocity = -2f;
-                if (Input.Pressed(Input.Jump) && !IsCrouching) _verticalVelocity = jumpSpeed;
+                _slideTimer = Mathf.Max(0f, _slideTimer - dt);
+                var steering = wish.sqrMagnitude > 0.01f ? wish.normalized : Vector3.zero;
+                _slideVelocity = Vector3.Lerp(_slideVelocity, steering * Mathf.Max(5.5f, _slideVelocity.magnitude), 1f - Mathf.Exp(-1.6f * dt));
+                _slideVelocity = Vector3.MoveTowards(_slideVelocity, Vector3.zero, 5.8f * dt);
+                if (_slideTimer <= 0f || _slideVelocity.magnitude < 4.2f) EndSlide();
             }
-            else _verticalVelocity -= gravity * dt;
+
+            IsCrouching = crouchHeld || IsSliding;
+            UpdateStance(dt);
+
+            var targetSpeed = IsCrouching ? crouchSpeed : (IsSprinting ? sprintSpeed : moveSpeed);
+            var desired = wish * targetSpeed;
+            var acceleration = grounded
+                ? (desired.sqrMagnitude > 0.01f ? groundAcceleration : groundDeceleration)
+                : airAcceleration;
+            if (!IsSliding)
+                _planarVelocity = Vector3.MoveTowards(_planarVelocity, desired, acceleration * dt);
+            else
+                _planarVelocity = Vector3.Lerp(_planarVelocity, Vector3.zero, 1f - Mathf.Exp(-8f * dt));
+
+            if (grounded)
+            {
+                if (_verticalVelocity < 0f) _verticalVelocity = -2f;
+                if (Input.Pressed(Input.Jump) && !IsCrouching)
+                {
+                    _verticalVelocity = jumpSpeed;
+                    Jumped?.Invoke();
+                }
+            }
+            else
+            {
+                _verticalVelocity -= gravity * dt;
+                _peakFallSpeed = Mathf.Min(_peakFallSpeed, _verticalVelocity);
+            }
 
             if (Input.Pressed(Input.Dash) && _dashCooldown <= 0f)
             {
                 var dashDirection = wish.sqrMagnitude > 0.05f ? wish.normalized : transform.forward;
                 _dashVelocity = dashDirection * dashImpulse;
                 _dashCooldown = 0.72f;
+                DashStarted?.Invoke();
             }
             _dashVelocity = Vector3.Lerp(_dashVelocity, Vector3.zero, 1f - Mathf.Exp(-9f * dt));
 
-            Velocity = wish * speed + _dashVelocity + Vector3.up * _verticalVelocity;
+            var horizontal = _planarVelocity + _dashVelocity + (IsSliding ? _slideVelocity : Vector3.zero);
+            Velocity = horizontal + Vector3.up * _verticalVelocity;
             _controller.Move(Velocity * dt);
+            UpdateFootsteps(grounded, dt);
+            _wasGrounded = grounded;
+        }
+
+        private void BeginSlide(Vector3 wish)
+        {
+            var current = _planarVelocity;
+            var direction = current.sqrMagnitude > 0.5f ? current.normalized : (wish.sqrMagnitude > 0.05f ? wish.normalized : transform.forward);
+            _slideVelocity = direction * Mathf.Max(slideEntrySpeed, current.magnitude + 1.2f);
+            _slideTimer = slideDuration;
+            _slideCooldown = 0.95f;
+            SlideStarted?.Invoke();
+        }
+
+        private void EndSlide()
+        {
+            if (_slideVelocity.sqrMagnitude > 0.01f)
+                _planarVelocity += Vector3.ClampMagnitude(_slideVelocity, sprintSpeed) * 0.45f;
+            _slideVelocity = Vector3.zero;
+            _slideTimer = 0f;
+        }
+
+        private void UpdateStance(float dt)
+        {
+            var targetHeight = IsCrouching ? Mathf.Max(1.05f, _standingHeight * 0.64f) : _standingHeight;
+            var nextHeight = Mathf.Lerp(_controller.height, targetHeight, 1f - Mathf.Exp(-15f * dt));
+            _controller.height = nextHeight;
+            _controller.center = new Vector3(_standingCenter.x, nextHeight * 0.5f, _standingCenter.z);
+            if (view != null)
+            {
+                var targetY = IsCrouching ? _standingViewY * 0.68f : _standingViewY;
+                var p = view.localPosition;
+                p.y = Mathf.Lerp(p.y, targetY, 1f - Mathf.Exp(-13f * dt));
+                view.localPosition = p;
+            }
+        }
+
+        private void UpdateFootsteps(bool grounded, float dt)
+        {
+            if (!grounded || IsSliding || HorizontalSpeed < 1.2f)
+            {
+                _lastStepPosition = transform.position;
+                _stepDistance = 0f;
+                return;
+            }
+
+            var planarDelta = Vector3.ProjectOnPlane(transform.position - _lastStepPosition, Vector3.up).magnitude;
+            _lastStepPosition = transform.position;
+            _stepDistance += planarDelta;
+            var stride = Mathf.Lerp(1.65f, 1.15f, Mathf.InverseLerp(moveSpeed, sprintSpeed, HorizontalSpeed));
+            if (_stepDistance < stride) return;
+            _stepDistance = 0f;
+            Footstep?.Invoke(Mathf.Clamp01(HorizontalSpeed / sprintSpeed));
         }
 
         public void Teleport(Vector3 position, Quaternion rotation)
@@ -103,7 +240,12 @@ namespace Apex.Traversal
             transform.SetPositionAndRotation(position, rotation);
             _yaw = rotation.eulerAngles.y;
             _verticalVelocity = 0f;
+            _planarVelocity = Vector3.zero;
             _dashVelocity = Vector3.zero;
+            _slideVelocity = Vector3.zero;
+            _slideTimer = 0f;
+            _peakFallSpeed = 0f;
+            _lastStepPosition = position;
             _controller.enabled = wasEnabled;
         }
     }
