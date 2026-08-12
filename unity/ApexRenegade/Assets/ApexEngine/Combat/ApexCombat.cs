@@ -40,6 +40,7 @@ namespace Apex.Combat
         public bool IsAlive => Health > 0f;
 
         public event Action<DamagePayload, float, float> Damaged;
+        public event Action<float, float> Restored;
         public event Action Died;
 
         private void Awake() => ResetVitals();
@@ -55,6 +56,27 @@ namespace Apex.Combat
         {
             Health = maxHealth;
             Shield = maxShield;
+            Restored?.Invoke(Health, Shield);
+        }
+
+        public float RestoreHealth(float amount)
+        {
+            if (!IsAlive || amount <= 0f) return 0f;
+            var before = Health;
+            Health = Mathf.Min(maxHealth, Health + amount);
+            var restored = Health - before;
+            if (restored > 0f) Restored?.Invoke(Health, Shield);
+            return restored;
+        }
+
+        public float RestoreShield(float amount)
+        {
+            if (!IsAlive || amount <= 0f || maxShield <= 0f) return 0f;
+            var before = Shield;
+            Shield = Mathf.Min(maxShield, Shield + amount);
+            var restored = Shield - before;
+            if (restored > 0f) Restored?.Invoke(Health, Shield);
+            return restored;
         }
 
         public void ApplyDamage(in DamagePayload payload)
