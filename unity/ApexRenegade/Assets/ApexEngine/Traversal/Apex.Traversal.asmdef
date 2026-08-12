@@ -1,6 +1,6 @@
 {
   "name": "Apex.Traversal",
   "rootNamespace": "Apex.Traversal",
-  "references": ["Apex.Core", "Apex.Input", "Apex.Settings"],
+  "references": ["Apex.Core", "Apex.Input", "Apex.Settings", "Unity.InputSystem"],
   "autoReferenced": true
 }
