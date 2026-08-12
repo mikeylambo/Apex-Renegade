@@ -1,6 +1,9 @@
+using System.Collections.Generic;
+using Apex.Combat;
 using Apex.Core;
 using Apex.Debugging;
 using Apex.Input;
+using Apex.Save;
 using Apex.Settings;
 using Apex.Traversal;
 using Apex.World;
@@ -12,11 +15,17 @@ namespace Apex.Renegade
     public sealed class ApexRenegadePortBootstrap : MonoBehaviour
     {
         private ApexSettingsService _settings;
+        private ApexSaveService _save;
         private ApexInputService _input;
         private ApexFirstPersonMotor _player;
+        private HealthComponent _playerHealth;
         private ApexBikeMotor _bike;
+        private Camera _mainCamera;
         private ApexPortCamera _cameraRig;
         private ApexWorldRegionTracker _regions;
+        private RenegadeWeaponController _weapon;
+        private RenegadeLifeCycle _lifeCycle;
+        private readonly List<ApexPortEnemy> _enemies = new();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void EnsureBootstrap()
@@ -33,6 +42,9 @@ namespace Apex.Renegade
             _settings = new ApexSettingsService();
             _settings.Initialize(ApexRuntime.Services);
 
+            _save = new ApexSaveService();
+            _save.Initialize(ApexRuntime.Services);
+
             var inputObject = new GameObject("Apex Input Service");
             inputObject.transform.SetParent(transform);
             _input = inputObject.AddComponent<ApexInputService>();
@@ -43,6 +55,12 @@ namespace Apex.Renegade
             BuildPlayer();
             BuildBike();
             BuildCamera();
+            BuildCombat();
+            BuildCheckpoints();
+            BuildEnemies();
+
+            if (!_save.HasCheckpoint)
+                _save.SetCheckpoint("scar-entry", "The Scar", _player.transform.position, _player.transform.rotation);
 
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
@@ -75,7 +93,6 @@ namespace Apex.Renegade
             if (GameObject.Find("Apex Port World") != null) return;
             var world = new GameObject("Apex Port World");
 
-            var sky = Camera.main;
             RenderSettings.fog = true;
             RenderSettings.fogColor = new Color(0.035f, 0.065f, 0.10f);
             RenderSettings.fogMode = FogMode.ExponentialSquared;
@@ -142,6 +159,10 @@ namespace Apex.Renegade
             controller.height = 1.85f;
             controller.radius = 0.38f;
             controller.center = new Vector3(0f, 0.92f, 0f);
+            player.AddComponent<ApexFirstPersonMarker>();
+
+            _playerHealth = player.AddComponent<HealthComponent>();
+            _playerHealth.Configure(100f, 55f);
 
             var view = new GameObject("View Pivot").transform;
             view.SetParent(player.transform, false);
@@ -162,7 +183,7 @@ namespace Apex.Renegade
             _bike = bike.AddComponent<ApexBikeMotor>();
 
             var dark = MakeMaterial("Bike Graphite", new Color(0.025f, 0.03f, 0.04f), 0.85f);
-            var spectral = MakeMaterial("Bike Spectral", new Color(0.25f, 0.18f, 0.85f), 0.2f);
+            var spectral = MakeMaterial("Bike Spectral", new Color(0.25f, 0.18f, 0.85f), 0.2f, new Color(0.22f, 0.08f, 0.85f));
             CreateBlock(bike.transform, "Bike Body", new Vector3(0f, 0f, 0f), new Vector3(1.0f, 0.5f, 2.35f), dark, false);
             CreateBlock(bike.transform, "Spectral Spine", new Vector3(0f, 0.35f, -0.1f), new Vector3(0.22f, 0.14f, 2.6f), spectral, false);
             CreateWheel(bike.transform, new Vector3(0f, -0.28f, -1.05f), dark);
@@ -172,13 +193,87 @@ namespace Apex.Renegade
         private void BuildCamera()
         {
             var cameraObject = new GameObject("Apex Camera");
-            var camera = cameraObject.AddComponent<Camera>();
-            camera.fieldOfView = _settings.Data.fov;
-            camera.nearClipPlane = 0.05f;
-            camera.farClipPlane = 7000f;
+            _mainCamera = cameraObject.AddComponent<Camera>();
+            _mainCamera.fieldOfView = _settings.Data.fov;
+            _mainCamera.nearClipPlane = 0.05f;
+            _mainCamera.farClipPlane = 7000f;
             cameraObject.AddComponent<AudioListener>();
             _cameraRig = cameraObject.AddComponent<ApexPortCamera>();
             _cameraRig.Configure(_player, _bike, _input, _settings);
+        }
+
+        private void BuildCombat()
+        {
+            _weapon = gameObject.AddComponent<RenegadeWeaponController>();
+            _weapon.Configure(_mainCamera, _input, _player.gameObject);
+            _cameraRig.SetWeapon(_weapon);
+
+            _lifeCycle = _player.gameObject.AddComponent<RenegadeLifeCycle>();
+            _lifeCycle.Configure(_playerHealth, _player, _save, _bike);
+
+            var hud = gameObject.AddComponent<ApexPortHud>();
+            hud.Configure(_playerHealth, _weapon, _bike, _regions, _lifeCycle);
+        }
+
+        private void BuildCheckpoints()
+        {
+            CreateCheckpoint("scar-entry", "The Scar", new Vector3(0f, 2.2f, 525f), new Vector3(36f, 4f, 10f));
+            CreateCheckpoint("expanse-threshold", "The Expanse", new Vector3(0f, 2.2f, -720f), new Vector3(50f, 5f, 12f));
+            CreateCheckpoint("vertical-threshold", "Vertical Megacity", new Vector3(0f, 2.2f, -2860f), new Vector3(54f, 6f, 14f));
+        }
+
+        private void CreateCheckpoint(string id, string region, Vector3 position, Vector3 size)
+        {
+            var go = new GameObject($"Checkpoint // {id}");
+            go.transform.position = position;
+            var trigger = go.AddComponent<BoxCollider>();
+            trigger.isTrigger = true;
+            trigger.size = size;
+            var checkpoint = go.AddComponent<ApexCheckpoint>();
+            checkpoint.Configure(id, region);
+        }
+
+        private void BuildEnemies()
+        {
+            var root = new GameObject("Apex Port // Hollow Encounter").transform;
+            var positions = new[]
+            {
+                new Vector3(-18f, 1f, 430f),
+                new Vector3(14f, 1f, 405f),
+                new Vector3(-24f, 1f, 355f),
+                new Vector3(22f, 1f, 320f),
+                new Vector3(-10f, 1f, 270f),
+                new Vector3(11f, 1f, 235f)
+            };
+
+            for (var i = 0; i < positions.Length; i++)
+            {
+                var enemyObject = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                enemyObject.name = $"Hollow // {i + 1:00}";
+                enemyObject.transform.SetParent(root);
+                enemyObject.transform.position = positions[i];
+                enemyObject.transform.localScale = new Vector3(0.78f, 1.15f, 0.78f);
+                if (enemyObject.TryGetComponent<Collider>(out var primitiveCollider)) Destroy(primitiveCollider);
+
+                var material = MakeMaterial($"Hollow {i:00}", new Color(0.055f, 0.07f, 0.095f), 0.35f, new Color(0.08f, 0.04f, 0.22f));
+                if (enemyObject.TryGetComponent<Renderer>(out var renderer)) renderer.material = material;
+
+                var controller = enemyObject.AddComponent<CharacterController>();
+                controller.height = 2.0f;
+                controller.radius = 0.45f;
+                controller.center = new Vector3(0f, 1f, 0f);
+                var health = enemyObject.AddComponent<HealthComponent>();
+                var enemy = enemyObject.AddComponent<ApexPortEnemy>();
+                enemy.Configure(_player.transform, 72f + i * 4f, material);
+                enemy.Killed += OnEnemyKilled;
+                _weapon.RegisterTarget(enemy);
+                _enemies.Add(enemy);
+            }
+        }
+
+        private void OnEnemyKilled(ApexPortEnemy enemy)
+        {
+            _weapon?.UnregisterTarget(enemy);
         }
 
         private static ApexRegionVolume CreateRegion(Transform parent, string id, Vector3 center, Vector3 size)
@@ -215,12 +310,17 @@ namespace Apex.Renegade
             if (wheel.TryGetComponent<Collider>(out var col)) Destroy(col);
         }
 
-        private static Material MakeMaterial(string name, Color color, float metallic)
+        private static Material MakeMaterial(string name, Color color, float metallic, Color emission = default)
         {
             var shader = Shader.Find("Standard") ?? Shader.Find("Unlit/Color");
             var material = new Material(shader) { name = name, color = color };
             if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", metallic);
             if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", 0.35f);
+            if (material.HasProperty("_EmissionColor") && emission.maxColorComponent > 0f)
+            {
+                material.EnableKeyword("_EMISSION");
+                material.SetColor("_EmissionColor", emission);
+            }
             return material;
         }
     }
@@ -231,6 +331,7 @@ namespace Apex.Renegade
         private ApexBikeMotor _bike;
         private ApexInputService _input;
         private ApexSettingsService _settings;
+        private RenegadeWeaponController _weapon;
         private float _orbitYaw;
         private float _orbitPitch = 10f;
         private float _lastLookTime = -10f;
@@ -244,11 +345,17 @@ namespace Apex.Renegade
             _settings = settings;
         }
 
+        public void SetWeapon(RenegadeWeaponController weapon) => _weapon = weapon;
+
         private void LateUpdate()
         {
             if (_player == null || _bike == null || _input == null) return;
             var camera = GetComponent<Camera>();
-            camera.fieldOfView = Mathf.Lerp(camera.fieldOfView, _settings.Data.fov + (_bike.IsMounted ? Mathf.Clamp01(Mathf.Abs(_bike.Speed) / 70f) * 12f : 0f), 1f - Mathf.Exp(-6f * Time.deltaTime));
+            var baseFov = _settings.Data.fov;
+            if (!_bike.IsMounted && _weapon != null && _weapon.IsAiming && _weapon.Weapon != null)
+                baseFov = _weapon.Weapon.Definition.adsFov;
+            var speedFov = _bike.IsMounted ? Mathf.Clamp01(Mathf.Abs(_bike.Speed) / 70f) * 12f : 0f;
+            camera.fieldOfView = Mathf.Lerp(camera.fieldOfView, baseFov + speedFov, 1f - Mathf.Exp(-8f * Time.deltaTime));
 
             if (!_bike.IsMounted)
             {
