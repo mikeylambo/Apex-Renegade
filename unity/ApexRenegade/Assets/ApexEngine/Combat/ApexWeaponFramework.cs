@@ -139,6 +139,12 @@ namespace Apex.Combat
 
         public void AddReserve(int amount) => StateMachine.AddReserve(amount);
 
+        public void RestoreAmmo(int magazine, int reserve)
+        {
+            StateMachine.RestoreAmmo(magazine, reserve);
+            PublishStateIfChanged();
+        }
+
         private void PublishStateIfChanged()
         {
             if (_lastState == StateMachine.State) return;
