@@ -1,0 +1,7 @@
+{
+  "name": "Apex.Renegade.Abilities.PlayMode.Tests",
+  "rootNamespace": "Apex.Renegade.Abilities.Tests",
+  "references": ["Apex.Renegade.Abilities", "Apex.Port", "Apex.Abilities", "Apex.Traversal", "Apex.Combat", "Apex.Core"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "autoReferenced": false
+}
