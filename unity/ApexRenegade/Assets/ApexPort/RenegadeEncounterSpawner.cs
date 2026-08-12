@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Apex.AI;
 using Apex.Combat;
 using Apex.Encounter;
 using UnityEngine;
@@ -7,7 +8,7 @@ namespace Apex.Renegade
 {
     public sealed class RenegadeEncounterSpawner : MonoBehaviour, IEncounterSpawnAdapter
     {
-        private readonly HashSet<ApexPortEnemy> _living = new();
+        private readonly HashSet<RenegadeEnemyAgent> _living = new();
         private Transform _target;
         private RenegadeArsenalController _arsenal;
         private int _sequence;
@@ -50,14 +51,15 @@ namespace Apex.Renegade
             controller.radius = enforcer ? 0.62f : 0.45f;
             controller.center = new Vector3(0f, controller.height * 0.5f, 0f);
             go.AddComponent<HealthComponent>();
-            var enemy = go.AddComponent<ApexPortEnemy>();
-            enemy.Configure(_target, enforcer ? 190f : 78f + (_sequence % 4) * 6f, material);
+            go.AddComponent<ApexAgentMotor>();
+            var enemy = go.AddComponent<RenegadeEnemyAgent>();
+            enemy.Configure(_target, enforcer, material);
             enemy.Killed += OnKilled;
             _arsenal.RegisterTarget(enemy);
             _living.Add(enemy);
         }
 
-        private void OnKilled(ApexPortEnemy enemy)
+        private void OnKilled(RenegadeEnemyAgent enemy)
         {
             if (enemy == null) return;
             enemy.Killed -= OnKilled;
