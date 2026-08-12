@@ -11,7 +11,7 @@ namespace Apex.Renegade
     [DefaultExecutionOrder(-850)]
     public sealed class ApexPortRuntimeShell : MonoBehaviour
     {
-        private enum Page { Root, Settings, Controls }
+        private enum Page { Root, Settings, Graphics, Controls }
 
         private ApexInputService _input;
         private ApexSettingsService _settings;
@@ -34,6 +34,15 @@ namespace Apex.Renegade
             "Right Stick Deadzone", "Look Response Curve", "Look Acceleration", "ADS Sensitivity",
             "Camera Shake", "Vibration", "Master Volume", "SFX Volume", "Invert Y", "Damage Indicators"
         };
+
+        private static readonly string[] GraphicsLabels =
+        {
+            "Quality Budget", "Frame Rate Target", "VSync", "Fullscreen",
+            "Shadow Distance", "LOD Bias", "Anti-Aliasing"
+        };
+
+        private static readonly int[] FrameRates = { 30, 60, 90, 120, 144 };
+        private static readonly int[] AntiAliasingOptions = { 0, 2, 4, 8 };
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void EnsureShell()
@@ -93,14 +102,22 @@ namespace Apex.Renegade
             var now = Time.unscaledTime;
             if (now >= _nextNavigate && Mathf.Abs(nav.y) > 0.55f)
             {
-                var count = _page switch { Page.Root => 3, Page.Settings => SettingLabels.Length, Page.Controls => ControlActions().Length, _ => 1 };
+                var count = _page switch
+                {
+                    Page.Root => 4,
+                    Page.Settings => SettingLabels.Length,
+                    Page.Graphics => GraphicsLabels.Length,
+                    Page.Controls => ControlActions().Length,
+                    _ => 1
+                };
                 _selection = (_selection + (nav.y < 0f ? 1 : -1) + count) % count;
                 _nextNavigate = now + 0.16f;
             }
 
-            if (_page == Page.Settings && now >= _nextNavigate && Mathf.Abs(nav.x) > 0.55f)
+            if (now >= _nextNavigate && Mathf.Abs(nav.x) > 0.55f)
             {
-                AdjustSetting(_selection, nav.x > 0f ? 1f : -1f);
+                if (_page == Page.Settings) AdjustSetting(_selection, nav.x > 0f ? 1f : -1f);
+                else if (_page == Page.Graphics) AdjustGraphics(_selection, nav.x > 0f ? 1 : -1);
                 _nextNavigate = now + 0.09f;
             }
 
@@ -108,13 +125,27 @@ namespace Apex.Renegade
             if (_page == Page.Root)
             {
                 if (_selection == 0) _pause.SetPaused(false);
-                else if (_selection == 1) { _page = Page.Settings; _selection = 0; }
-                else { _page = Page.Controls; _selection = 0; }
+                else
+                {
+                    _page = _selection switch
+                    {
+                        1 => Page.Settings,
+                        2 => Page.Graphics,
+                        _ => Page.Controls
+                    };
+                    _selection = 0;
+                }
             }
             else if (_page == Page.Settings)
             {
                 if (_selection == 12) _settings.Data.invertY = !_settings.Data.invertY;
                 else if (_selection == 13) _settings.Data.directionalDamageIndicators = !_settings.Data.directionalDamageIndicators;
+                _pause.ApplyAndSaveSettings();
+            }
+            else if (_page == Page.Graphics)
+            {
+                if (_selection == 2) _settings.Data.vSync = !_settings.Data.vSync;
+                else if (_selection == 3) _settings.Data.fullscreen = !_settings.Data.fullscreen;
                 _pause.ApplyAndSaveSettings();
             }
             else if (_page == Page.Controls)
@@ -158,6 +189,37 @@ namespace Apex.Renegade
             _pause.ApplyAndSaveSettings();
         }
 
+        private void AdjustGraphics(int index, int direction)
+        {
+            var d = _settings.Data;
+            switch (index)
+            {
+                case 0: d.qualityPreset = Mathf.Clamp(d.qualityPreset + direction, 0, 3); break;
+                case 1: d.targetFrameRate = CycleOption(FrameRates, d.targetFrameRate, direction); break;
+                case 2: d.vSync = !d.vSync; break;
+                case 3: d.fullscreen = !d.fullscreen; break;
+                case 4: d.shadowDistance = Mathf.Clamp(d.shadowDistance + direction * 10f, 0f, 300f); break;
+                case 5: d.lodBias = Mathf.Clamp(d.lodBias + direction * 0.1f, 0.4f, 3f); break;
+                case 6: d.antiAliasing = CycleOption(AntiAliasingOptions, d.antiAliasing, direction); break;
+            }
+            _pause.ApplyAndSaveSettings();
+        }
+
+        private static int CycleOption(int[] values, int current, int direction)
+        {
+            var index = 0;
+            var best = int.MaxValue;
+            for (var i = 0; i < values.Length; i++)
+            {
+                var delta = Mathf.Abs(values[i] - current);
+                if (delta >= best) continue;
+                best = delta;
+                index = i;
+            }
+            index = (index + (direction >= 0 ? 1 : -1) + values.Length) % values.Length;
+            return values[index];
+        }
+
         private void OnPauseChanged(bool paused)
         {
             Cursor.lockState = paused ? CursorLockMode.None : CursorLockMode.Locked;
@@ -178,17 +240,24 @@ namespace Apex.Renegade
 
             var panel = new Rect(Mathf.Max(34f, Screen.width * 0.09f), Mathf.Max(28f, Screen.height * 0.055f), Mathf.Min(760f, Screen.width * 0.68f), Mathf.Min(860f, Screen.height * 0.90f));
             GUI.Box(panel, GUIContent.none);
-            var title = _page switch { Page.Settings => "APEX // SETTINGS", Page.Controls => "APEX // CONTROLS", _ => "APEX // PAUSED" };
+            var title = _page switch
+            {
+                Page.Settings => "APEX // SETTINGS",
+                Page.Graphics => "APEX // GRAPHICS",
+                Page.Controls => "APEX // CONTROLS",
+                _ => "APEX // PAUSED"
+            };
             GUI.Label(new Rect(panel.x + 28f, panel.y + 20f, panel.width - 56f, 42f), title, _title);
 
             if (_page == Page.Root) DrawPauseRoot(panel);
             else if (_page == Page.Settings) DrawSettings(panel);
+            else if (_page == Page.Graphics) DrawGraphics(panel);
             else DrawControls(panel);
         }
 
         private void DrawPauseRoot(Rect panel)
         {
-            var labels = new[] { "RESUME", "SETTINGS", "CONTROLS / REMAP" };
+            var labels = new[] { "RESUME", "SETTINGS", "GRAPHICS / PERFORMANCE", "CONTROLS / REMAP" };
             var x = panel.x + 30f;
             var y = panel.y + 92f;
             var width = Mathf.Min(420f, panel.width - 60f);
@@ -199,11 +268,15 @@ namespace Apex.Renegade
                 {
                     _selection = i;
                     if (i == 0) _pause.SetPaused(false);
-                    else { _page = i == 1 ? Page.Settings : Page.Controls; _selection = 0; }
+                    else
+                    {
+                        _page = i == 1 ? Page.Settings : (i == 2 ? Page.Graphics : Page.Controls);
+                        _selection = 0;
+                    }
                 }
             }
-            GUI.Label(new Rect(x, y + 190f, panel.width - 60f, 28f), "D-PAD / LS  Navigate    •    A  Select    •    B / ESC  Back", _label);
-            GUI.Label(new Rect(x, y + 222f, panel.width - 60f, 28f), "D-Pad ↓  Bike / Recall    •    D-Pad ←/→  Weapons", _label);
+            GUI.Label(new Rect(x, y + 244f, panel.width - 60f, 28f), "D-PAD / LS  Navigate    •    A  Select    •    B / ESC  Back", _label);
+            GUI.Label(new Rect(x, y + 276f, panel.width - 60f, 28f), "D-Pad ↓  Bike / Recall    •    D-Pad ←/→  Weapons", _label);
         }
 
         private void DrawSettings(Rect panel)
@@ -216,18 +289,40 @@ namespace Apex.Renegade
                 d.cameraShake.ToString("0.00"), d.vibration.ToString("0.00"), d.masterVolume.ToString("0.00"), d.sfxVolume.ToString("0.00"),
                 d.invertY ? "ON" : "OFF", d.directionalDamageIndicators ? "ON" : "OFF"
             };
+            DrawRows(panel, SettingLabels, values, "D-PAD ←/→ adjust    •    A toggle    •    B back");
+        }
+
+        private void DrawGraphics(Rect panel)
+        {
+            var d = _settings.Data;
+            var quality = new[] { "LOW", "MEDIUM", "HIGH", "ULTRA" }[Mathf.Clamp(d.qualityPreset, 0, 3)];
+            var values = new[]
+            {
+                quality,
+                $"{d.targetFrameRate} FPS",
+                d.vSync ? "ON" : "OFF",
+                d.fullscreen ? "ON" : "OFF",
+                $"{d.shadowDistance:0} m",
+                d.lodBias.ToString("0.00"),
+                d.antiAliasing == 0 ? "OFF" : $"{d.antiAliasing}x"
+            };
+            DrawRows(panel, GraphicsLabels, values, "D-PAD ←/→ adjust    •    A toggle    •    B back");
+        }
+
+        private void DrawRows(Rect panel, string[] labels, string[] values, string footer)
+        {
             var x = panel.x + 30f;
             var y = panel.y + 76f;
             var width = panel.width - 60f;
-            for (var i = 0; i < SettingLabels.Length; i++)
+            for (var i = 0; i < labels.Length; i++)
             {
                 if (i == _selection) DrawSelectionBar(x, y - 2f, width, 29f);
-                GUI.Label(new Rect(x + 8f, y, width * 0.70f, 25f), SettingLabels[i], _label);
+                GUI.Label(new Rect(x + 8f, y, width * 0.70f, 25f), labels[i], _label);
                 GUI.Label(new Rect(x + width * 0.72f, y, width * 0.25f, 25f), values[i], _value);
                 y += 31f;
             }
-            GUI.Label(new Rect(x, y + 10f, width, 26f), "D-PAD ←/→ adjust    •    A toggle    •    B back", _label);
-            if (GUI.Button(new Rect(x, y + 45f, 180f, 36f), "RESET SETTINGS", _button)) _pause.ResetSettings();
+            GUI.Label(new Rect(x, y + 10f, width, 26f), footer, _label);
+            if (_page == Page.Settings && GUI.Button(new Rect(x, y + 45f, 180f, 36f), "RESET SETTINGS", _button)) _pause.ResetSettings();
         }
 
         private void DrawControls(Rect panel)
