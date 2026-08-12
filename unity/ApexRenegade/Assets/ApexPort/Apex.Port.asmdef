@@ -1,6 +1,6 @@
 {
   "name": "Apex.Port",
   "rootNamespace": "Apex.Renegade",
-  "references": ["Apex.Core", "Apex.Settings", "Apex.Input", "Apex.Combat", "Apex.AI", "Apex.Traversal", "Apex.World", "Apex.Save", "Apex.Encounter", "Apex.Interaction", "Apex.UI", "Apex.Audio", "Apex.Camera", "Apex.Debug", "Unity.InputSystem"],
+  "references": ["Apex.Core", "Apex.Settings", "Apex.Input", "Apex.Combat", "Apex.AI", "Apex.Traversal", "Apex.World", "Apex.Save", "Apex.Encounter", "Apex.Interaction", "Apex.UI", "Apex.Audio", "Apex.Camera", "Apex.Graphics", "Apex.Debug", "Unity.InputSystem"],
   "autoReferenced": true
 }
