@@ -1,0 +1,6 @@
+{
+  "name": "Apex.Combat",
+  "rootNamespace": "Apex.Combat",
+  "references": ["Apex.Core"],
+  "autoReferenced": true
+}
