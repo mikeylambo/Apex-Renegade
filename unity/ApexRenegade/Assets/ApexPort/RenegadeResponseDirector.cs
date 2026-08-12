@@ -1,8 +1,11 @@
+using System.Collections;
 using Apex.Encounter;
+using Apex.Traversal;
 using UnityEngine;
 
 namespace Apex.Renegade
 {
+    [DefaultExecutionOrder(-650)]
     public sealed class RenegadeResponseDirector : MonoBehaviour
     {
         private RenegadeEscalationDirector _escalation;
@@ -10,8 +13,34 @@ namespace Apex.Renegade
         private Transform _observer;
         private int _highestStageResponded;
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void EnsureResponseDirector()
+        {
+            if (Object.FindFirstObjectByType<RenegadeResponseDirector>() != null) return;
+            new GameObject("Apex Response Director").AddComponent<RenegadeResponseDirector>();
+        }
+
+        private IEnumerator Start()
+        {
+            DontDestroyOnLoad(gameObject);
+            for (var i = 0; i < 60; i++)
+            {
+                var escalation = Object.FindFirstObjectByType<RenegadeEscalationDirector>();
+                var spawner = Object.FindFirstObjectByType<RenegadeEncounterSpawner>();
+                var player = Object.FindFirstObjectByType<ApexFirstPersonMotor>();
+                if (escalation != null && spawner != null && player != null)
+                {
+                    Configure(escalation, spawner, player.transform);
+                    yield break;
+                }
+                yield return null;
+            }
+            Debug.LogWarning("[Apex Response] Could not resolve escalation/spawner/player during bootstrap window.");
+        }
+
         public void Configure(RenegadeEscalationDirector escalation, RenegadeEncounterSpawner spawner, Transform observer)
         {
+            if (_escalation?.Pressure != null) _escalation.Pressure.StageChanged -= OnPressureStageChanged;
             _escalation = escalation;
             _spawner = spawner;
             _observer = observer;
