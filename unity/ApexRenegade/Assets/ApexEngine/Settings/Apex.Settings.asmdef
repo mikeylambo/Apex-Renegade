@@ -1,0 +1,6 @@
+{
+  "name": "Apex.Settings",
+  "rootNamespace": "Apex.Settings",
+  "references": ["Apex.Core"],
+  "autoReferenced": true
+}
