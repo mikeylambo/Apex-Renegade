@@ -1,0 +1,7 @@
+{
+  "name": "Apex.Port.Editor",
+  "rootNamespace": "Apex.Editor",
+  "references": ["Apex.Port", "Apex.Core", "Apex.Settings", "Apex.Input", "Apex.Combat", "Apex.Traversal", "Apex.World"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}
