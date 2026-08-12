@@ -1,8 +1,10 @@
-using System.Collections.Generic;
+using Apex.Audio;
 using Apex.Combat;
 using Apex.Core;
 using Apex.Debugging;
+using Apex.Encounter;
 using Apex.Input;
+using Apex.Interaction;
 using Apex.Save;
 using Apex.Settings;
 using Apex.Traversal;
@@ -17,15 +19,26 @@ namespace Apex.Renegade
         private ApexSettingsService _settings;
         private ApexSaveService _save;
         private ApexInputService _input;
+        private ApexAudioService _audio;
+        private ApexTelemetry _telemetry;
         private ApexFirstPersonMotor _player;
         private HealthComponent _playerHealth;
         private ApexBikeMotor _bike;
         private Camera _mainCamera;
-        private ApexPortCamera _cameraRig;
+        private ApexPortCameraV2 _cameraRig;
         private ApexWorldRegionTracker _regions;
-        private RenegadeWeaponController _weapon;
+        private RenegadeArsenalController _arsenal;
         private RenegadeLifeCycle _lifeCycle;
-        private readonly List<ApexPortEnemy> _enemies = new();
+        private ApexInteractionScanner _scanner;
+        private RenegadeEscalationDirector _escalation;
+        private RenegadeEncounterSpawner _encounterSpawner;
+        private ApexEncounterController _encounter;
+        private EncounterDefinition _encounterDefinition;
+
+        public RenegadeArsenalController Arsenal => _arsenal;
+        public ApexBikeMotor Bike => _bike;
+        public ApexEncounterController Encounter => _encounter;
+        public RenegadeEscalationDirector Escalation => _escalation;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void EnsureBootstrap()
@@ -50,14 +63,22 @@ namespace Apex.Renegade
             _input = inputObject.AddComponent<ApexInputService>();
             _input.Initialize(ApexRuntime.Services);
 
-            gameObject.AddComponent<ApexTelemetry>();
+            var audioObject = new GameObject("Apex Audio Service");
+            audioObject.transform.SetParent(transform);
+            _audio = audioObject.AddComponent<ApexAudioService>();
+            _audio.Initialize(ApexRuntime.Services);
+
+            _telemetry = gameObject.AddComponent<ApexTelemetry>();
+
             BuildWorld();
             BuildPlayer();
             BuildBike();
             BuildCamera();
             BuildCombat();
+            BuildInteractions();
             BuildCheckpoints();
-            BuildEnemies();
+            BuildEncounter();
+            BuildHud();
 
             if (!_save.HasCheckpoint)
                 _save.SetCheckpoint("scar-entry", "The Scar", _player.transform.position, _player.transform.rotation);
@@ -75,13 +96,6 @@ namespace Apex.Renegade
                 if (_bike.IsMounted) _bike.Dismount();
                 else if (_bike.CanMount(_player.transform)) _bike.Mount(_player);
                 else _bike.Recall();
-            }
-
-            if (_input.Pressed(_input.Pause))
-            {
-                var locked = Cursor.lockState == CursorLockMode.Locked;
-                Cursor.lockState = locked ? CursorLockMode.None : CursorLockMode.Locked;
-                Cursor.visible = locked;
             }
 
             if (_regions != null)
@@ -108,9 +122,11 @@ namespace Apex.Renegade
             sun.color = new Color(0.78f, 0.86f, 1f);
             sun.shadows = LightShadows.Soft;
 
-            var groundMat = MakeMaterial("Ground", new Color(0.12f, 0.14f, 0.15f), 0.15f);
-            var roadMat = MakeMaterial("Road", new Color(0.055f, 0.065f, 0.07f), 0.05f);
-            var cityMat = MakeMaterial("City", new Color(0.07f, 0.09f, 0.12f), 0.3f);
+            var groundMat = ApexPortMaterialFactory.Create("Ground", new Color(0.12f, 0.14f, 0.15f), 0.15f);
+            var roadMat = ApexPortMaterialFactory.Create("Road", new Color(0.055f, 0.065f, 0.07f), 0.05f);
+            var cityMat = ApexPortMaterialFactory.Create("City", new Color(0.07f, 0.09f, 0.12f), 0.3f);
+            var paleMat = ApexPortMaterialFactory.Create("Containment Pale", new Color(0.25f, 0.31f, 0.36f), 0.5f, new Color(0.035f, 0.07f, 0.12f));
+            var amberMat = ApexPortMaterialFactory.Create("Containment Amber", new Color(0.21f, 0.09f, 0.025f), 0.3f, new Color(0.85f, 0.22f, 0.025f));
 
             CreateBlock(world.transform, "Scar Ground", new Vector3(0f, -2f, 250f), new Vector3(1600f, 4f, 1500f), groundMat, true);
             CreateBlock(world.transform, "Expanse Ground", new Vector3(0f, -2f, -1550f), new Vector3(2000f, 4f, 2200f), groundMat, true);
@@ -124,6 +140,13 @@ namespace Apex.Renegade
                 var height = 45f + (i % 5) * 28f;
                 CreateBlock(world.transform, $"Scar Mass {i:00}", new Vector3(side * (125f + (i % 4) * 45f), height * 0.5f, z), new Vector3(60f + (i % 3) * 25f, height, 70f), cityMat, true);
             }
+
+            // The first Unity hero landmark: a containment gantry that makes The Scar readable from distance.
+            CreateBlock(world.transform, "Scar Containment Gantry", new Vector3(0f, 36f, 40f), new Vector3(185f, 8f, 14f), cityMat, true);
+            CreateBlock(world.transform, "Scar Gantry Left", new Vector3(-82f, 18f, 40f), new Vector3(12f, 36f, 18f), cityMat, true);
+            CreateBlock(world.transform, "Scar Gantry Right", new Vector3(82f, 18f, 40f), new Vector3(12f, 36f, 18f), cityMat, true);
+            for (var i = 0; i < 7; i++)
+                CreateBlock(world.transform, $"Gantry Light {i}", new Vector3(-60f + i * 20f, 31f, 32.5f), new Vector3(6f, 1.2f, 0.8f), i % 3 == 0 ? amberMat : paleMat, false);
 
             for (var i = 0; i < 20; i++)
             {
@@ -143,6 +166,14 @@ namespace Apex.Renegade
                 CreateBlock(world.transform, $"Vertical Megablock {i:00}", new Vector3(side * lane, height * 0.5f, z), new Vector3(85f + (i % 4) * 30f, height, 95f + (i % 3) * 45f), cityMat, true);
             }
 
+            // Suspended silhouettes provide a first-pass vertical canyon without committing to final art.
+            for (var i = 0; i < 5; i++)
+            {
+                var y = 110f + i * 92f;
+                var z = -3150f - i * 190f;
+                CreateBlock(world.transform, $"Vertical Suspended Span {i:00}", new Vector3(0f, y, z), new Vector3(300f + i * 45f, 12f, 34f), cityMat, true);
+            }
+
             var regionObjects = new ApexRegionVolume[3];
             regionObjects[0] = CreateRegion(world.transform, "The Scar", new Vector3(0f, 250f, 250f), new Vector3(1800f, 600f, 1700f));
             regionObjects[1] = CreateRegion(world.transform, "The Expanse", new Vector3(0f, 250f, -1600f), new Vector3(2200f, 600f, 2200f));
@@ -159,7 +190,6 @@ namespace Apex.Renegade
             controller.height = 1.85f;
             controller.radius = 0.38f;
             controller.center = new Vector3(0f, 0.92f, 0f);
-            player.AddComponent<ApexFirstPersonMarker>();
 
             _playerHealth = player.AddComponent<HealthComponent>();
             _playerHealth.Configure(100f, 55f);
@@ -182,37 +212,76 @@ namespace Apex.Renegade
             body.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
             _bike = bike.AddComponent<ApexBikeMotor>();
 
-            var dark = MakeMaterial("Bike Graphite", new Color(0.025f, 0.03f, 0.04f), 0.85f);
-            var spectral = MakeMaterial("Bike Spectral", new Color(0.25f, 0.18f, 0.85f), 0.2f, new Color(0.22f, 0.08f, 0.85f));
-            CreateBlock(bike.transform, "Bike Body", new Vector3(0f, 0f, 0f), new Vector3(1.0f, 0.5f, 2.35f), dark, false);
-            CreateBlock(bike.transform, "Spectral Spine", new Vector3(0f, 0.35f, -0.1f), new Vector3(0.22f, 0.14f, 2.6f), spectral, false);
-            CreateWheel(bike.transform, new Vector3(0f, -0.28f, -1.05f), dark);
-            CreateWheel(bike.transform, new Vector3(0f, -0.28f, 1.02f), dark);
+            var visualRoot = new GameObject("Bike Visual Root").transform;
+            visualRoot.SetParent(bike.transform, false);
+            _bike.SetVisualRoot(visualRoot);
+
+            var dark = ApexPortMaterialFactory.Create("Bike Graphite", new Color(0.025f, 0.03f, 0.04f), 0.85f);
+            var spectral = ApexPortMaterialFactory.Create("Bike Spectral", new Color(0.25f, 0.18f, 0.85f), 0.2f, new Color(0.22f, 0.08f, 0.85f));
+            var pale = ApexPortMaterialFactory.Create("Bike Pale", new Color(0.28f, 0.34f, 0.40f), 0.62f);
+            CreateBlock(visualRoot, "Bike Body", Vector3.zero, new Vector3(1.0f, 0.5f, 2.35f), dark, false);
+            CreateBlock(visualRoot, "Spectral Spine", new Vector3(0f, 0.35f, -0.1f), new Vector3(0.22f, 0.14f, 2.6f), spectral, false);
+            CreateBlock(visualRoot, "Front Fork", new Vector3(0f, 0.05f, 1.03f), new Vector3(0.16f, 0.65f, 0.13f), pale, false);
+            CreateWheel(visualRoot, new Vector3(0f, -0.28f, -1.05f), dark);
+            CreateWheel(visualRoot, new Vector3(0f, -0.28f, 1.02f), dark);
         }
 
         private void BuildCamera()
         {
             var cameraObject = new GameObject("Apex Camera");
+            cameraObject.tag = "MainCamera";
             _mainCamera = cameraObject.AddComponent<Camera>();
             _mainCamera.fieldOfView = _settings.Data.fov;
             _mainCamera.nearClipPlane = 0.05f;
             _mainCamera.farClipPlane = 7000f;
             cameraObject.AddComponent<AudioListener>();
-            _cameraRig = cameraObject.AddComponent<ApexPortCamera>();
+            _cameraRig = cameraObject.AddComponent<ApexPortCameraV2>();
             _cameraRig.Configure(_player, _bike, _input, _settings);
         }
 
         private void BuildCombat()
         {
-            _weapon = gameObject.AddComponent<RenegadeWeaponController>();
-            _weapon.Configure(_mainCamera, _input, _player.gameObject);
-            _cameraRig.SetWeapon(_weapon);
+            _arsenal = gameObject.AddComponent<RenegadeArsenalController>();
+            _arsenal.Configure(_mainCamera, _input, _player.gameObject, _bike, _audio);
+            _cameraRig.SetArsenal(_arsenal);
 
             _lifeCycle = _player.gameObject.AddComponent<RenegadeLifeCycle>();
             _lifeCycle.Configure(_playerHealth, _player, _save, _bike);
 
-            var hud = gameObject.AddComponent<ApexPortHud>();
-            hud.Configure(_playerHealth, _weapon, _bike, _regions, _lifeCycle);
+            _escalation = gameObject.AddComponent<RenegadeEscalationDirector>();
+            _escalation.Configure(_playerHealth, _arsenal);
+
+            var audioBridge = gameObject.AddComponent<RenegadeAudioBridge>();
+            audioBridge.Configure(_audio, _bike, _playerHealth, _arsenal);
+        }
+
+        private void BuildInteractions()
+        {
+            _scanner = _player.gameObject.AddComponent<ApexInteractionScanner>();
+            _scanner.Configure(_input, _mainCamera.transform, _player.gameObject, 5.2f, 0.20f);
+
+            var root = new GameObject("Apex Port // Pickups").transform;
+            var ammoMat = ApexPortMaterialFactory.Create("Ammo Pickup", new Color(0.18f, 0.12f, 0.42f), 0.25f, new Color(0.35f, 0.16f, 1f));
+            var mawMat = ApexPortMaterialFactory.Create("Maw Ammo Pickup", new Color(0.35f, 0.11f, 0.035f), 0.25f, new Color(1f, 0.18f, 0.025f));
+            var healthMat = ApexPortMaterialFactory.Create("Vitality Pickup", new Color(0.28f, 0.04f, 0.08f), 0.1f, new Color(0.9f, 0.06f, 0.12f));
+            var shieldMat = ApexPortMaterialFactory.Create("Shield Pickup", new Color(0.05f, 0.22f, 0.36f), 0.1f, new Color(0.08f, 0.42f, 1f));
+
+            CreatePickup(root, "Corona Cell", PrimitiveType.Cube, new Vector3(-7f, 1.1f, 470f), new Vector3(0.65f, 0.65f, 0.65f), ammoMat, RenegadePickupKind.Ammo, 54, "corona-blaster");
+            CreatePickup(root, "Maw Shell Cache", PrimitiveType.Cube, new Vector3(8f, 1.1f, 442f), new Vector3(0.9f, 0.5f, 0.65f), mawMat, RenegadePickupKind.Ammo, 18, "maw");
+            CreatePickup(root, "Vitality Cache", PrimitiveType.Sphere, new Vector3(-10f, 1.1f, 365f), new Vector3(0.72f, 0.72f, 0.72f), healthMat, RenegadePickupKind.Health, 45);
+            CreatePickup(root, "Shield Cache", PrimitiveType.Sphere, new Vector3(11f, 1.1f, 315f), new Vector3(0.72f, 0.72f, 0.72f), shieldMat, RenegadePickupKind.Shield, 40);
+        }
+
+        private void CreatePickup(Transform parent, string name, PrimitiveType primitive, Vector3 position, Vector3 scale, Material material, RenegadePickupKind kind, int amount, string weaponId = null)
+        {
+            var go = GameObject.CreatePrimitive(primitive);
+            go.name = name;
+            go.transform.SetParent(parent);
+            go.transform.position = position;
+            go.transform.localScale = scale;
+            if (go.TryGetComponent<Renderer>(out var renderer)) renderer.sharedMaterial = material;
+            var pickup = go.AddComponent<RenegadePickup>();
+            pickup.Configure(kind, amount, _arsenal, _playerHealth, _audio, weaponId);
         }
 
         private void BuildCheckpoints()
@@ -233,47 +302,41 @@ namespace Apex.Renegade
             checkpoint.Configure(id, region);
         }
 
-        private void BuildEnemies()
+        private void BuildEncounter()
         {
-            var root = new GameObject("Apex Port // Hollow Encounter").transform;
-            var positions = new[]
+            var root = new GameObject("Apex Port // Scar Encounter");
+            root.transform.position = new Vector3(0f, 0f, 405f);
+            _encounterSpawner = root.AddComponent<RenegadeEncounterSpawner>();
+            _encounterSpawner.Configure(_player.transform, _arsenal);
+
+            _encounterDefinition = ScriptableObject.CreateInstance<EncounterDefinition>();
+            _encounterDefinition.encounterId = "scar-first-contact";
+            _encounterDefinition.autoStart = true;
+            _encounterDefinition.waves.Add(new EncounterWave
             {
-                new Vector3(-18f, 1f, 430f),
-                new Vector3(14f, 1f, 405f),
-                new Vector3(-24f, 1f, 355f),
-                new Vector3(22f, 1f, 320f),
-                new Vector3(-10f, 1f, 270f),
-                new Vector3(11f, 1f, 235f)
-            };
-
-            for (var i = 0; i < positions.Length; i++)
+                id = "hollow-response",
+                targetCount = 6,
+                reinforcementDelay = 0.38f,
+                maxSimultaneous = 4,
+                archetypeTag = "hollow"
+            });
+            _encounterDefinition.waves.Add(new EncounterWave
             {
-                var enemyObject = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-                enemyObject.name = $"Hollow // {i + 1:00}";
-                enemyObject.transform.SetParent(root);
-                enemyObject.transform.position = positions[i];
-                enemyObject.transform.localScale = new Vector3(0.78f, 1.15f, 0.78f);
-                if (enemyObject.TryGetComponent<Collider>(out var primitiveCollider)) Destroy(primitiveCollider);
+                id = "enforcer-response",
+                targetCount = 3,
+                reinforcementDelay = 0.85f,
+                maxSimultaneous = 2,
+                archetypeTag = "enforcer"
+            });
 
-                var material = MakeMaterial($"Hollow {i:00}", new Color(0.055f, 0.07f, 0.095f), 0.35f, new Color(0.08f, 0.04f, 0.22f));
-                if (enemyObject.TryGetComponent<Renderer>(out var renderer)) renderer.material = material;
-
-                var controller = enemyObject.AddComponent<CharacterController>();
-                controller.height = 2.0f;
-                controller.radius = 0.45f;
-                controller.center = new Vector3(0f, 1f, 0f);
-                var health = enemyObject.AddComponent<HealthComponent>();
-                var enemy = enemyObject.AddComponent<ApexPortEnemy>();
-                enemy.Configure(_player.transform, 72f + i * 4f, material);
-                enemy.Killed += OnEnemyKilled;
-                _weapon.RegisterTarget(enemy);
-                _enemies.Add(enemy);
-            }
+            _encounter = root.AddComponent<ApexEncounterController>();
+            _encounter.Configure(_encounterDefinition, _encounterSpawner);
         }
 
-        private void OnEnemyKilled(ApexPortEnemy enemy)
+        private void BuildHud()
         {
-            _weapon?.UnregisterTarget(enemy);
+            var hud = gameObject.AddComponent<ApexPortHudV2>();
+            hud.Configure(_playerHealth, _arsenal, _bike, _regions, _lifeCycle, _mainCamera, _scanner, _escalation, _telemetry, _settings);
         }
 
         private static ApexRegionVolume CreateRegion(Transform parent, string id, Vector3 center, Vector3 size)
@@ -310,82 +373,9 @@ namespace Apex.Renegade
             if (wheel.TryGetComponent<Collider>(out var col)) Destroy(col);
         }
 
-        private static Material MakeMaterial(string name, Color color, float metallic, Color emission = default)
+        private void OnDestroy()
         {
-            var shader = Shader.Find("Standard") ?? Shader.Find("Unlit/Color");
-            var material = new Material(shader) { name = name, color = color };
-            if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", metallic);
-            if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", 0.35f);
-            if (material.HasProperty("_EmissionColor") && emission.maxColorComponent > 0f)
-            {
-                material.EnableKeyword("_EMISSION");
-                material.SetColor("_EmissionColor", emission);
-            }
-            return material;
-        }
-    }
-
-    public sealed class ApexPortCamera : MonoBehaviour
-    {
-        private ApexFirstPersonMotor _player;
-        private ApexBikeMotor _bike;
-        private ApexInputService _input;
-        private ApexSettingsService _settings;
-        private RenegadeWeaponController _weapon;
-        private float _orbitYaw;
-        private float _orbitPitch = 10f;
-        private float _lastLookTime = -10f;
-        private Vector3 _velocity;
-
-        public void Configure(ApexFirstPersonMotor player, ApexBikeMotor bike, ApexInputService input, ApexSettingsService settings)
-        {
-            _player = player;
-            _bike = bike;
-            _input = input;
-            _settings = settings;
-        }
-
-        public void SetWeapon(RenegadeWeaponController weapon) => _weapon = weapon;
-
-        private void LateUpdate()
-        {
-            if (_player == null || _bike == null || _input == null) return;
-            var camera = GetComponent<Camera>();
-            var baseFov = _settings.Data.fov;
-            if (!_bike.IsMounted && _weapon != null && _weapon.IsAiming && _weapon.Weapon != null)
-                baseFov = _weapon.Weapon.Definition.adsFov;
-            var speedFov = _bike.IsMounted ? Mathf.Clamp01(Mathf.Abs(_bike.Speed) / 70f) * 12f : 0f;
-            camera.fieldOfView = Mathf.Lerp(camera.fieldOfView, baseFov + speedFov, 1f - Mathf.Exp(-8f * Time.deltaTime));
-
-            if (!_bike.IsMounted)
-            {
-                var view = _player.View;
-                if (view == null) return;
-                transform.SetPositionAndRotation(view.position, view.rotation);
-                _orbitYaw = 0f;
-                _orbitPitch = 10f;
-                return;
-            }
-
-            var look = _input.ReadLook(Time.deltaTime, false);
-            if (look.sqrMagnitude > 0.0001f)
-            {
-                _orbitYaw += look.x;
-                _orbitPitch = Mathf.Clamp(_orbitPitch - look.y, -12f, 46f);
-                _lastLookTime = Time.unscaledTime;
-            }
-            else if (Time.unscaledTime - _lastLookTime > 1.5f)
-            {
-                _orbitYaw = Mathf.LerpAngle(_orbitYaw, 0f, 1f - Mathf.Exp(-1.7f * Time.deltaTime));
-                _orbitPitch = Mathf.Lerp(_orbitPitch, 10f, 1f - Mathf.Exp(-1.7f * Time.deltaTime));
-            }
-
-            var speed01 = Mathf.Clamp01(Mathf.Abs(_bike.Speed) / 78f);
-            var pivot = _bike.transform.position + Vector3.up * (1.45f + speed01 * 0.25f);
-            var orbit = Quaternion.Euler(_orbitPitch, _bike.transform.eulerAngles.y + _orbitYaw, 0f);
-            var desired = pivot + orbit * new Vector3(0f, 0.6f, -(6.5f + speed01 * 4.5f));
-            transform.position = Vector3.SmoothDamp(transform.position, desired, ref _velocity, speed01 > 0.4f ? 0.075f : 0.11f, Mathf.Infinity, Time.deltaTime);
-            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation((pivot + _bike.transform.forward * (4f + speed01 * 7f)) - transform.position, Vector3.up), 1f - Mathf.Exp(-9f * Time.deltaTime));
+            if (_encounterDefinition != null) Destroy(_encounterDefinition);
         }
     }
 }
