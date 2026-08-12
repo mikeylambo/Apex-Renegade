@@ -28,7 +28,7 @@ namespace Apex.Traversal
         private float _verticalVelocity;
         private float _yaw;
         private float _pitch;
-        public bool MovementEnabled { get; set; } = true;
+        public bool MovementEnabled { get; private set; } = true;
         public Transform View => view;
         public Vector3 Velocity { get; private set; }
 
@@ -41,6 +41,15 @@ namespace Apex.Traversal
                 if (camera != null) view = camera.transform;
             }
             _yaw = transform.eulerAngles.y;
+        }
+
+        public void SetView(Transform target) => view = target;
+
+        public void SetMountedState(bool mounted)
+        {
+            MovementEnabled = !mounted;
+            if (_controller != null) _controller.enabled = !mounted;
+            _verticalVelocity = 0f;
         }
 
         private void Update()
@@ -102,6 +111,7 @@ namespace Apex.Traversal
         public float BoostEnergy => _boostEnergy;
         public float Speed => Vector3.Dot(_body.velocity, transform.forward);
         public bool IsRecalling => _recalling;
+        public ApexFirstPersonMotor Rider => _rider;
 
         private void Awake()
         {
@@ -162,12 +172,15 @@ namespace Apex.Traversal
             if (to.magnitude < 3.5f)
             {
                 _recalling = false;
+                _body.isKinematic = false;
                 _body.velocity = Vector3.zero;
                 return;
             }
             _body.isKinematic = true;
             transform.position += to.normalized * Mathf.Min(recallSpeed * Time.deltaTime, to.magnitude);
-            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(Vector3.ProjectOnPlane(to, Vector3.up)), 1f - Mathf.Exp(-7f * Time.deltaTime));
+            var planar = Vector3.ProjectOnPlane(to, Vector3.up);
+            if (planar.sqrMagnitude > 0.01f)
+                transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(planar), 1f - Mathf.Exp(-7f * Time.deltaTime));
         }
 
         public bool CanMount(Transform rider) => rider != null && Vector3.Distance(rider.position, transform.position) <= mountRadius;
@@ -179,8 +192,7 @@ namespace Apex.Traversal
             _body.isKinematic = false;
             _rider = rider;
             _input = rider.Input;
-            rider.MovementEnabled = false;
-            rider.gameObject.SetActive(false);
+            rider.SetMountedState(true);
         }
 
         public void Dismount()
@@ -189,9 +201,8 @@ namespace Apex.Traversal
             var rider = _rider;
             _rider = null;
             _input = null;
-            rider.gameObject.SetActive(true);
             rider.Teleport(transform.position + transform.right * 1.8f + Vector3.up * 0.5f, Quaternion.Euler(0f, transform.eulerAngles.y, 0f));
-            rider.MovementEnabled = true;
+            rider.SetMountedState(false);
         }
 
         public void Recall()
