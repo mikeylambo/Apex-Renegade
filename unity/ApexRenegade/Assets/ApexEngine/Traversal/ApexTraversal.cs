@@ -54,7 +54,7 @@ namespace Apex.Traversal
 
         private void Update()
         {
-            if (Input == null || !MovementEnabled) return;
+            if (Time.timeScale <= 0f || Input == null || !MovementEnabled) return;
             var dt = Time.deltaTime;
             var look = Input.ReadLook(dt, Input.Held(Input.Aim));
             _yaw += look.x;
@@ -109,7 +109,7 @@ namespace Apex.Traversal
         private float _boostEnergy = 100f;
         public bool IsMounted => _rider != null;
         public float BoostEnergy => _boostEnergy;
-        public float Speed => Vector3.Dot(_body.velocity, transform.forward);
+        public float Speed => _body != null ? Vector3.Dot(_body.velocity, transform.forward) : 0f;
         public bool IsRecalling => _recalling;
         public ApexFirstPersonMotor Rider => _rider;
 
@@ -124,7 +124,7 @@ namespace Apex.Traversal
 
         private void FixedUpdate()
         {
-            if (!IsMounted || _input == null) return;
+            if (Time.timeScale <= 0f || !IsMounted || _input == null) return;
             var dt = Time.fixedDeltaTime;
             var throttle = _input.Held(_input.Fire) ? 1f : 0f;
             var brake = _input.Held(_input.Aim) ? 1f : 0f;
@@ -164,7 +164,7 @@ namespace Apex.Traversal
 
         private void Update()
         {
-            if (!_recalling || IsMounted) return;
+            if (Time.timeScale <= 0f || !_recalling || IsMounted) return;
             var player = Object.FindFirstObjectByType<ApexFirstPersonMotor>();
             if (player == null) return;
             var target = player.transform.position + player.transform.right * 2.2f;
