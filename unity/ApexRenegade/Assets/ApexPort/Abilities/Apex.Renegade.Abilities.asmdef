@@ -1,0 +1,6 @@
+{
+  "name": "Apex.Renegade.Abilities",
+  "rootNamespace": "Apex.Renegade.Abilities",
+  "references": ["Apex.Port", "Apex.Abilities", "Apex.Combat", "Apex.Input", "Apex.Audio", "Apex.Camera", "Apex.Traversal"],
+  "autoReferenced": true
+}
