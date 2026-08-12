@@ -38,7 +38,7 @@ namespace Apex.Debugging
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void EnsureService()
         {
-            if (Object.FindFirstObjectByType<ApexScenarioService>() != null) return;
+            if (UnityEngine.Object.FindFirstObjectByType<ApexScenarioService>() != null) return;
             new GameObject("Apex Scenario Service").AddComponent<ApexScenarioService>();
         }
 
