@@ -10,6 +10,10 @@ export class PlayerCamera {
     this.baseFov = 92;
     this.targetFov = this.baseFov;
     this._vehicleCameraPos = new THREE.Vector3();
+    this._vehicleOrbitYaw = 0;
+    this._vehicleOrbitPitch = .03;
+    this._vehicleLookIdle = 0;
+    this._vehicleWasMounted = false;
   }
 
   addRecoil(pitchKick, yawKick) {
@@ -19,6 +23,25 @@ export class PlayerCamera {
 
   setFovPunch(fov) { this.targetFov = fov; }
 
+  updateVehicleLook(delta, dt) {
+    const active = Math.abs(delta.x) + Math.abs(delta.y) > .02;
+    if (active) {
+      this._vehicleLookIdle = 0;
+      this._vehicleOrbitYaw -= delta.x * .00215;
+      this._vehicleOrbitPitch -= delta.y * .00165;
+      this._vehicleOrbitPitch = THREE.MathUtils.clamp(this._vehicleOrbitPitch, -.30, .56);
+    } else {
+      this._vehicleLookIdle += dt;
+      // Keep deliberate camera choices for a moment, then softly return behind
+      // the bike. Fast travel still feels directed without fighting the right stick.
+      if (this._vehicleLookIdle > 1.45) {
+        const recenter = this._vehicleLookIdle > 3.2 ? 1.55 : .72;
+        this._vehicleOrbitYaw = THREE.MathUtils.damp(this._vehicleOrbitYaw, 0, recenter, dt);
+        this._vehicleOrbitPitch = THREE.MathUtils.damp(this._vehicleOrbitPitch, .03, recenter * .72, dt);
+      }
+    }
+  }
+
   update(dt) {
     const c = this.controller;
     this.recoilVelocity.multiplyScalar(0.001 ** dt);
@@ -26,9 +49,17 @@ export class PlayerCamera {
     this.recoil.multiplyScalar(Math.pow(0.0001, dt));
 
     if (c.vehicleMounted) {
+      if (!this._vehicleWasMounted) {
+        this._vehicleCameraPos.set(0, 0, 0);
+        this._vehicleOrbitYaw = 0;
+        this._vehicleOrbitPitch = .03;
+        this._vehicleLookIdle = 0;
+      }
+      this._vehicleWasMounted = true;
       this._updateVehicleCamera(dt);
       return;
     }
+    this._vehicleWasMounted = false;
 
     const eye = c.getEyePosition();
     const speed = Math.hypot(c.velocity.x, c.velocity.z);
@@ -54,8 +85,7 @@ export class PlayerCamera {
   _updateVehicleCamera(dt) {
     const c = this.controller;
     const pos = c.position;
-    const forward = c.forward;
-    const right = c.right;
+    const bikeForward = c.forward;
     const telemetry = c.vehicleTelemetry || {};
     const speed = Math.abs(Number(telemetry.speed)) || Math.hypot(c.velocity.x, c.velocity.z);
     const speed01 = THREE.MathUtils.clamp(speed / 82, 0, 1);
@@ -65,28 +95,35 @@ export class PlayerCamera {
     const air = Math.min(1, (Number(telemetry.airTime) || 0) / 1.2);
     const wheelie = THREE.MathUtils.clamp(Number(telemetry.wheelie) || 0, 0, 1);
 
-    const backDistance = 6.6 + speed01 * 3.8 + boost * 1.4 + wheelie * 1.8;
-    const sideOffset = .18 - drift * steer * 1.15;
-    const height = 3.05 + speed01 * .32 + air * .70 + wheelie * .30;
+    const viewYaw = c.yaw + this._vehicleOrbitYaw;
+    const orbitForward = new THREE.Vector3(-Math.sin(viewYaw), 0, -Math.cos(viewYaw));
+    const orbitRight = new THREE.Vector3(Math.cos(viewYaw), 0, -Math.sin(viewYaw));
+
+    const backDistance = 7.0 + speed01 * 4.6 + boost * 1.65 + wheelie * 1.65;
+    const driftSide = -drift * steer * 1.05;
+    const pitchLift = Math.sin(this._vehicleOrbitPitch) * backDistance * .82;
+    const height = 3.15 + speed01 * .42 + air * .72 + wheelie * .52 + pitchLift;
+
     const desired = pos.clone()
-      .addScaledVector(forward, -backDistance)
-      .addScaledVector(right, sideOffset)
+      .addScaledVector(orbitForward, -backDistance)
+      .addScaledVector(orbitRight, driftSide)
       .add(new THREE.Vector3(0, height, 0));
 
     if (this._vehicleCameraPos.lengthSq() < .01) this._vehicleCameraPos.copy(desired);
-    const follow = boost > .2 ? .00055 : drift > .25 ? .0012 : wheelie > .15 ? .0006 : .000035;
+    const follow = boost > .2 ? .00048 : drift > .25 ? .0010 : wheelie > .15 ? .00052 : .000025;
     this._vehicleCameraPos.lerp(desired, 1 - Math.pow(follow, dt));
     this.camera.position.copy(this._vehicleCameraPos);
 
+    // Look slightly ahead along the actual bike heading. The camera can orbit all
+    // the way around the motorcycle without changing steering or rider heading.
     const target = pos.clone()
-      .addScaledVector(forward, 9.5 + speed01 * 8.5 - wheelie * 2.0)
-      .addScaledVector(right, drift * steer * .55)
-      .add(new THREE.Vector3(0, 1.15 - c.pitch * 5.2 + air * .35 + wheelie * .12, 0));
+      .addScaledVector(bikeForward, 4.5 + speed01 * 5.5)
+      .add(new THREE.Vector3(0, 1.18 + air * .34 + wheelie * .26, 0));
     this.camera.lookAt(target);
-    this.camera.rotation.z += -drift * steer * .035;
+    this.camera.rotation.z += -drift * steer * .040;
 
-    const desiredFov = 86 + speed01 * 16 + boost * 8 - wheelie * 1.8;
-    this.camera.fov = THREE.MathUtils.damp(this.camera.fov, desiredFov, boost > .2 ? 8 : 6, dt);
+    const desiredFov = 84 + speed01 * 18 + boost * 8.5 - wheelie * 1.5;
+    this.camera.fov = THREE.MathUtils.damp(this.camera.fov, desiredFov, boost > .2 ? 8.5 : 6.5, dt);
     this.camera.updateProjectionMatrix();
     this.targetFov = this.baseFov;
   }
