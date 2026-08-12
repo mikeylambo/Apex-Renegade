@@ -1,6 +1,6 @@
 {
   "name": "Apex.World",
   "rootNamespace": "Apex.World",
-  "references": ["Apex.Core", "Apex.Traversal"],
+  "references": ["Apex.Core", "Apex.Traversal", "Apex.Debug"],
   "autoReferenced": true
 }
