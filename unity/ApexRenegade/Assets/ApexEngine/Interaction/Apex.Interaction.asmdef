@@ -1,6 +1,6 @@
 {
   "name": "Apex.Interaction",
   "rootNamespace": "Apex.Interaction",
-  "references": ["Apex.Core", "Apex.Input"],
+  "references": ["Apex.Core", "Apex.Input", "Unity.InputSystem"],
   "autoReferenced": true
 }
