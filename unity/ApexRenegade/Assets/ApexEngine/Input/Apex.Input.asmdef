@@ -1,0 +1,6 @@
+{
+  "name": "Apex.Input",
+  "rootNamespace": "Apex.Input",
+  "references": ["Apex.Core", "Apex.Settings", "Unity.InputSystem"],
+  "autoReferenced": true
+}
