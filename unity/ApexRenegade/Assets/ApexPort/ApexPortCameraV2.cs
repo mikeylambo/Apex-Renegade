@@ -68,6 +68,7 @@ namespace Apex.Renegade
 
         private void LateUpdate()
         {
+            if (Time.timeScale <= 0f) return;
             if (_player == null || _bike == null || _input == null || _settings == null) return;
             var camera = GetComponent<UnityEngine.Camera>();
             if (camera == null) return;
