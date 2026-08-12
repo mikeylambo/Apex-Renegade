@@ -62,6 +62,11 @@ namespace Apex.Audio
             Register("combat.hit", Tone("Hit", 0.045f, 290f, 610f, 0.3f, 0.12f));
             Register("combat.kill", Tone("Kill", 0.11f, 260f, 960f, 0.38f, 0.08f));
             Register("player.damage", Tone("Damage", 0.12f, 92f, 175f, 0.35f, 0.35f));
+            Register("player.step", Tone("Footstep", 0.075f, 92f, 58f, 0.34f, 0.48f));
+            Register("player.jump", Tone("Jump", 0.10f, 115f, 260f, 0.22f, 0.16f));
+            Register("player.land", Tone("Land", 0.13f, 84f, 46f, 0.48f, 0.58f));
+            Register("player.slide", Tone("Slide", 0.22f, 150f, 74f, 0.28f, 0.72f));
+            Register("player.dash", Tone("Dash", 0.14f, 170f, 740f, 0.30f, 0.22f));
             Register("bike.recall", Tone("Bike Recall", 0.34f, 130f, 520f, 0.42f, 0.08f));
             Register("bike.mount", Tone("Bike Mount", 0.12f, 180f, 480f, 0.35f, 0.08f));
             Register("bike.boost", Tone("Bike Boost", 0.28f, 95f, 710f, 0.5f, 0.18f));
