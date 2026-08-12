@@ -15,6 +15,8 @@ namespace Apex.Renegade
         private Camera _camera;
         private ApexInputService _input;
         private GameObject _source;
+        private HealthComponent _sourceHealth;
+        private ApexBikeMotor _bike;
         private WeaponDefinition _definition;
         private ApexWeaponRuntime _weapon;
         private readonly ApexAimAssistResolver _aimAssist = new();
@@ -23,22 +25,25 @@ namespace Apex.Renegade
         private Vector3 _viewModelBasePosition;
         private Vector3 _recoilPosition;
         private Vector3 _recoilRotation;
+        private bool _lastMounted;
         private float _hitmarkerUntil;
         private float _killmarkerUntil;
         private float _muzzleUntil;
 
         public ApexWeaponRuntime Weapon => _weapon;
-        public bool IsAiming => _input != null && _input.Held(_input.Aim);
+        public bool IsAiming => _input != null && (_bike == null || !_bike.IsMounted) && _input.Held(_input.Aim);
         public bool HitmarkerVisible => Time.unscaledTime < _hitmarkerUntil;
         public bool KillmarkerVisible => Time.unscaledTime < _killmarkerUntil;
         public bool MuzzleVisible => Time.unscaledTime < _muzzleUntil;
         public event Action<Vector3, bool> HitConfirmed;
 
-        public void Configure(Camera camera, ApexInputService input, GameObject source)
+        public void Configure(Camera camera, ApexInputService input, GameObject source, ApexBikeMotor bike)
         {
             _camera = camera;
             _input = input;
             _source = source;
+            _sourceHealth = source != null ? source.GetComponent<HealthComponent>() : null;
+            _bike = bike;
 
             _definition = ScriptableObject.CreateInstance<WeaponDefinition>();
             _definition.weaponId = "corona-blaster";
@@ -84,7 +89,21 @@ namespace Apex.Renegade
             var dt = Time.deltaTime;
             _weapon.Tick(dt);
 
-            var wantsFire = _definition.automatic ? _input.Held(_input.Fire) : _input.Pressed(_input.Fire);
+            var mounted = _bike != null && _bike.IsMounted;
+            if (mounted != _lastMounted)
+            {
+                _lastMounted = mounted;
+                if (_viewModel != null) _viewModel.gameObject.SetActive(!mounted);
+            }
+
+            if (_sourceHealth == null || !_sourceHealth.IsAlive)
+            {
+                UpdateViewModel(dt);
+                return;
+            }
+
+            var fireAction = mounted ? _input.BikeFire : _input.Fire;
+            var wantsFire = _definition.automatic ? _input.Held(fireAction) : _input.Pressed(fireAction);
             if (wantsFire && _weapon.TryFire()) FireShot();
             if (_input.Pressed(_input.Reload)) _weapon.TryReload();
 
@@ -95,7 +114,7 @@ namespace Apex.Renegade
         {
             var origin = _camera.transform.position;
             var forward = _camera.transform.forward;
-            if (IsAiming && _aimAssist.TryResolve(origin, forward, out var solution))
+            if (IsAiming && _input.UsingGamepad && _aimAssist.TryResolve(origin, forward, out var solution))
             {
                 var assist = Mathf.Clamp01(solution.Strength * 0.24f);
                 forward = Vector3.Slerp(forward, solution.Direction, assist).normalized;
@@ -110,9 +129,9 @@ namespace Apex.Renegade
             _recoilPosition += new Vector3(0f, 0.005f, -0.065f);
 
             if (!Physics.Raycast(origin, direction, out var hit, _definition.range, ~0, QueryTriggerInteraction.Ignore)) return;
-            var damageable = hit.collider.GetComponentInParent<IDamageable>();
+            var damageable = hit.collider.GetComponentInParent<HealthComponent>();
             var enemy = hit.collider.GetComponentInParent<ApexPortEnemy>();
-            var wasAlive = damageable?.IsAlive ?? false;
+            var wasAlive = damageable != null && damageable.IsAlive;
             if (damageable != null)
             {
                 damageable.ApplyDamage(new DamagePayload(_definition.damage, hit.point, direction, _definition.damageKind, _source));
@@ -151,7 +170,7 @@ namespace Apex.Renegade
 
         private void UpdateViewModel(float dt)
         {
-            if (_viewModel == null) return;
+            if (_viewModel == null || !_viewModel.gameObject.activeSelf) return;
             _recoilPosition = Vector3.Lerp(_recoilPosition, Vector3.zero, 1f - Mathf.Exp(-18f * dt));
             _recoilRotation = Vector3.Lerp(_recoilRotation, Vector3.zero, 1f - Mathf.Exp(-15f * dt));
             var ads = IsAiming ? new Vector3(-0.34f, 0.29f, -0.07f) : Vector3.zero;
@@ -312,6 +331,7 @@ namespace Apex.Renegade
         private bool _respawning;
         public float LastDamageTime { get; private set; } = -10f;
         public Vector3 LastDamageDirection { get; private set; }
+        public bool IsRespawning => _respawning;
 
         public void Configure(HealthComponent health, ApexFirstPersonMotor motor, ApexSaveService save, ApexBikeMotor bike)
         {
@@ -359,21 +379,24 @@ namespace Apex.Renegade
         private ApexBikeMotor _bike;
         private ApexWorldRegionTracker _regions;
         private RenegadeLifeCycle _life;
+        private Camera _camera;
         private GUIStyle _small;
         private GUIStyle _large;
+        private GUIStyle _damage;
 
-        public void Configure(HealthComponent health, RenegadeWeaponController weapon, ApexBikeMotor bike, ApexWorldRegionTracker regions, RenegadeLifeCycle life)
+        public void Configure(HealthComponent health, RenegadeWeaponController weapon, ApexBikeMotor bike, ApexWorldRegionTracker regions, RenegadeLifeCycle life, Camera camera)
         {
             _health = health;
             _weapon = weapon;
             _bike = bike;
             _regions = regions;
             _life = life;
+            _camera = camera;
         }
 
         private void OnGUI()
         {
-            if (_health == null || _weapon?.Weapon == null) return;
+            if (_health == null || _weapon == null || _weapon.Weapon == null) return;
             EnsureStyles();
             var w = Screen.width;
             var h = Screen.height;
@@ -389,10 +412,11 @@ namespace Apex.Renegade
             if (_weapon.HitmarkerVisible)
             {
                 GUI.color = _weapon.KillmarkerVisible ? new Color(1f, 0.72f, 0.28f, 1f) : Color.white;
+                var oldMatrix = GUI.matrix;
                 GUIUtility.RotateAroundPivot(45f, new Vector2(cx, cy));
                 DrawRect(new Rect(cx - 9f, cy - 1f, 18f, 2f));
                 DrawRect(new Rect(cx - 1f, cy - 9f, 2f, 18f));
-                GUI.matrix = Matrix4x4.identity;
+                GUI.matrix = oldMatrix;
             }
 
             GUI.color = Color.white;
@@ -405,27 +429,58 @@ namespace Apex.Renegade
 
             if (_bike != null)
             {
-                var bikeText = _bike.IsMounted ? $"BIKE  {Mathf.Abs(_bike.Speed) * 3.6f:000} km/h   DRIVE {_bike.BoostEnergy:000}" : (_bike.IsRecalling ? "BIKE // RECALLING" : "D-PAD ↓ / V // MOUNT / RECALL");
-                GUI.Label(new Rect(28f, h - 42f, 500f, 24f), bikeText, _small);
+                var bikeText = _bike.IsMounted
+                    ? $"BIKE  {Mathf.Abs(_bike.Speed) * 3.6f:000} km/h   DRIVE {_bike.BoostEnergy:000}   RB FIRE"
+                    : (_bike.IsRecalling ? "BIKE // RECALLING" : "D-PAD ↓ / V // MOUNT / RECALL");
+                GUI.Label(new Rect(28f, h - 42f, 560f, 24f), bikeText, _small);
             }
 
-            if (_life != null && Time.unscaledTime - _life.LastDamageTime < 0.28f)
+            DrawDamageFeedback(w, h);
+
+            if (_life != null && _life.IsRespawning)
             {
-                GUI.color = new Color(1f, 0.18f, 0.12f, 0.35f * (1f - (Time.unscaledTime - _life.LastDamageTime) / 0.28f));
+                GUI.color = new Color(0f, 0f, 0f, 0.7f);
                 GUI.DrawTexture(new Rect(0f, 0f, w, h), Texture2D.whiteTexture);
                 GUI.color = Color.white;
+                GUI.Label(new Rect(cx - 170f, cy - 20f, 340f, 40f), "RECONSTITUTING // CHECKPOINT", _large);
             }
+        }
+
+        private void DrawDamageFeedback(float w, float h)
+        {
+            if (_life == null) return;
+            var age = Time.unscaledTime - _life.LastDamageTime;
+            if (age >= 0.38f) return;
+
+            GUI.color = new Color(1f, 0.18f, 0.12f, 0.23f * (1f - age / 0.38f));
+            GUI.DrawTexture(new Rect(0f, 0f, w, h), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            if (_camera == null) return;
+            var local = _camera.transform.InverseTransformDirection(_life.LastDamageDirection);
+            string glyph;
+            Rect rect;
+            if (Mathf.Abs(local.x) > Mathf.Abs(local.z))
+            {
+                glyph = local.x > 0f ? ">" : "<";
+                rect = local.x > 0f ? new Rect(w - 92f, h * 0.5f - 30f, 60f, 60f) : new Rect(32f, h * 0.5f - 30f, 60f, 60f);
+            }
+            else
+            {
+                glyph = local.z > 0f ? "▲" : "▼";
+                rect = local.z > 0f ? new Rect(w * 0.5f - 30f, 55f, 60f, 60f) : new Rect(w * 0.5f - 30f, h - 125f, 60f, 60f);
+            }
+            GUI.Label(rect, glyph, _damage);
         }
 
         private void EnsureStyles()
         {
-            _small ??= new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 15,
-                fontStyle = FontStyle.Bold,
-                normal = { textColor = new Color(0.75f, 0.84f, 0.96f) }
-            };
-            _large ??= new GUIStyle(_small) { fontSize = 19 };
+            if (_small != null) return;
+            _small = new GUIStyle(GUI.skin.label) { fontSize = 15, fontStyle = FontStyle.Bold };
+            _small.normal.textColor = new Color(0.75f, 0.84f, 0.96f);
+            _large = new GUIStyle(_small) { fontSize = 19 };
+            _damage = new GUIStyle(_large) { fontSize = 34, alignment = TextAnchor.MiddleCenter };
+            _damage.normal.textColor = new Color(1f, 0.32f, 0.22f);
         }
 
         private static void DrawRect(Rect rect) => GUI.DrawTexture(rect, Texture2D.whiteTexture);
