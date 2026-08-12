@@ -24,26 +24,35 @@ namespace Apex.Renegade
             // Give all AfterSceneLoad runtime bootstrap hooks and one normal frame time to finish.
             for (var i = 0; i < 4; i++) yield return null;
 
+            Exception failure = null;
+            Material runtimeMaterial = null;
             try
             {
-                var runtimeMaterial = Resources.Load<Material>("Apex/RuntimeLit");
+                runtimeMaterial = Resources.Load<Material>("Apex/RuntimeLit");
                 Require(runtimeMaterial != null, "Runtime material resource did not load.");
                 Require(runtimeMaterial.shader != null, "Runtime material shader is null in standalone player.");
 
-                Require(Object.FindFirstObjectByType<ApexRenegadePortBootstrap>() != null, "Apex runtime bootstrap is missing.");
-                Require(Object.FindFirstObjectByType<ApexFirstPersonMotor>() != null, "Renegade player motor is missing.");
-                Require(Object.FindFirstObjectByType<ApexBikeMotor>() != null, "Renegade bike is missing.");
-                Require(Object.FindFirstObjectByType<RenegadeWeaponController>() != null, "Corona weapon controller is missing.");
-                Require(Object.FindFirstObjectByType<Camera>() != null, "Runtime camera is missing.");
+                Require(UnityEngine.Object.FindFirstObjectByType<ApexRenegadePortBootstrap>() != null, "Apex runtime bootstrap is missing.");
+                Require(UnityEngine.Object.FindFirstObjectByType<ApexFirstPersonMotor>() != null, "Renegade player motor is missing.");
+                Require(UnityEngine.Object.FindFirstObjectByType<ApexBikeMotor>() != null, "Renegade bike is missing.");
+                Require(UnityEngine.Object.FindFirstObjectByType<RenegadeWeaponController>() != null, "Corona weapon controller is missing.");
+                Require(UnityEngine.Object.FindFirstObjectByType<Camera>() != null, "Runtime camera is missing.");
                 Require(GameObject.Find("Apex Port World") != null, "Apex Port World is missing.");
+            }
+            catch (Exception ex)
+            {
+                failure = ex;
+            }
 
+            if (failure == null)
+            {
                 Debug.Log($"[Apex Player Smoke] PASS // shader={runtimeMaterial.shader.name}");
                 yield return null;
                 Application.Quit(0);
             }
-            catch (Exception ex)
+            else
             {
-                Debug.LogError($"[Apex Player Smoke] FAIL // {ex}");
+                Debug.LogError($"[Apex Player Smoke] FAIL // {failure}");
                 yield return null;
                 Application.Quit(2);
             }
