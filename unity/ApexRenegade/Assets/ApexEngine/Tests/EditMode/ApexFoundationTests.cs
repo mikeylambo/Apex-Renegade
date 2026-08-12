@@ -1,4 +1,5 @@
 using Apex.Combat;
+using Apex.Encounter;
 using Apex.Input;
 using Apex.Settings;
 using NUnit.Framework;
@@ -32,6 +33,11 @@ namespace Apex.Tests
             Assert.That(ApexInputService.ShapeStick(-0.10f, 0.19f, 0.04f, 1.55f), Is.Zero);
             Assert.That(ApexInputService.ShapeStick(0.75f, 0.19f, 0.04f, 1.55f), Is.GreaterThan(0f));
             Assert.That(ApexInputService.ShapeStick(-0.75f, 0.19f, 0.04f, 1.55f), Is.LessThan(0f));
+
+            var diagonal = ApexInputService.ShapeStick(new Vector2(0.6f, 0.6f), 0.19f, 0.04f, 1.55f);
+            Assert.That(diagonal.x, Is.GreaterThan(0f));
+            Assert.That(diagonal.y, Is.GreaterThan(0f));
+            Assert.That(Mathf.Abs(diagonal.normalized.x - diagonal.normalized.y), Is.LessThan(0.001f));
         }
 
         [Test]
@@ -85,6 +91,56 @@ namespace Apex.Tests
             Assert.That(runtime.Magazine, Is.EqualTo(1));
             Assert.That(runtime.Reserve, Is.Zero);
             Object.DestroyImmediate(definition);
+        }
+
+        [Test]
+        public void WeaponLoadout_SwitchesAndRoutesAmmoById()
+        {
+            var coronaDefinition = ScriptableObject.CreateInstance<WeaponDefinition>();
+            coronaDefinition.weaponId = "corona-blaster";
+            coronaDefinition.magazineSize = 18;
+            coronaDefinition.startingReserve = 12;
+            var mawDefinition = ScriptableObject.CreateInstance<WeaponDefinition>();
+            mawDefinition.weaponId = "maw";
+            mawDefinition.magazineSize = 6;
+            mawDefinition.startingReserve = 3;
+
+            var corona = new ApexWeaponRuntime(coronaDefinition);
+            var maw = new ApexWeaponRuntime(mawDefinition);
+            var loadout = new ApexWeaponLoadout();
+            loadout.Add(corona);
+            loadout.Add(maw, false);
+
+            Assert.That(loadout.Count, Is.EqualTo(2));
+            Assert.That(loadout.Active, Is.SameAs(corona));
+            Assert.That(loadout.EquipNext(), Is.True);
+            Assert.That(loadout.Active, Is.SameAs(maw));
+            var reserveBefore = maw.Reserve;
+            Assert.That(loadout.AddAmmo("maw", 9), Is.EqualTo(9));
+            Assert.That(maw.Reserve, Is.EqualTo(reserveBefore + 9));
+            Assert.That(loadout.EquipPrevious(), Is.True);
+            Assert.That(loadout.Active, Is.SameAs(corona));
+
+            Object.DestroyImmediate(coronaDefinition);
+            Object.DestroyImmediate(mawDefinition);
+        }
+
+        [Test]
+        public void EscalationMeter_CrossesAndRecoversStagesDeterministically()
+        {
+            var meter = new ApexEscalationMeter(
+                new EscalationStage(0, "BASELINE", 0f),
+                new EscalationStage(1, "RESPONSE", 0.25f),
+                new EscalationStage(2, "SIEGE", 0.70f));
+
+            Assert.That(meter.Stage.Id, Is.EqualTo("BASELINE"));
+            meter.Add(0.30f);
+            Assert.That(meter.Stage.Id, Is.EqualTo("RESPONSE"));
+            meter.Add(0.50f);
+            Assert.That(meter.Stage.Id, Is.EqualTo("SIEGE"));
+            meter.Decay(0.62f);
+            Assert.That(meter.Stage.Id, Is.EqualTo("BASELINE"));
+            Assert.That(meter.Value, Is.EqualTo(0.18f).Within(0.001f));
         }
 
         [Test]
