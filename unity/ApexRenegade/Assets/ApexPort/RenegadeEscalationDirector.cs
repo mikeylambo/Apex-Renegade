@@ -8,7 +8,7 @@ namespace Apex.Renegade
     public sealed class RenegadeEscalationDirector : MonoBehaviour
     {
         private HealthComponent _health;
-        private RenegadeWeaponController _weapon;
+        private RenegadeArsenalController _arsenal;
         private float _lastHostileActivity = -10f;
         private Color _baseFog;
         private float _baseFogDensity;
@@ -20,10 +20,10 @@ namespace Apex.Renegade
         public string RefusalLabel => Refusal?.Stage.Id ?? "T0 // BASELINE";
         public event Action StateChanged;
 
-        public void Configure(HealthComponent health, RenegadeWeaponController weapon)
+        public void Configure(HealthComponent health, RenegadeArsenalController arsenal)
         {
             _health = health;
-            _weapon = weapon;
+            _arsenal = arsenal;
             Pressure = new ApexEscalationMeter(
                 new EscalationStage(0, "UNNOTICED", 0f),
                 new EscalationStage(1, "RESPONSE", 0.18f),
@@ -45,15 +45,19 @@ namespace Apex.Renegade
                 _health.Damaged += OnDamaged;
                 _health.Died += OnDied;
             }
-            if (_weapon != null) _weapon.HitConfirmed += OnHitConfirmed;
+            if (_arsenal != null)
+            {
+                _arsenal.HitConfirmed += OnHitConfirmed;
+                _arsenal.ShotFired += OnShotFired;
+            }
             Pressure.StageChanged += _ => StateChanged?.Invoke();
             Refusal.StageChanged += _ => StateChanged?.Invoke();
         }
 
-        public void NotifyShot()
+        private void OnShotFired(ApexWeaponRuntime weapon)
         {
             _lastHostileActivity = Time.unscaledTime;
-            Pressure?.Add(0.004f);
+            Pressure?.Add(weapon?.Definition.weaponId == "maw" ? 0.009f : 0.004f);
         }
 
         private void OnHitConfirmed(Vector3 point, bool killed)
@@ -83,8 +87,6 @@ namespace Apex.Renegade
             if (Pressure == null || Refusal == null) return;
             if (Time.unscaledTime - _lastHostileActivity > 4f)
                 Pressure.Decay(Time.unscaledDeltaTime * 0.018f);
-
-            // Refusal is adaptation, not an alert meter. It recedes extremely slowly.
             if (Time.unscaledTime - _lastHostileActivity > 20f)
                 Refusal.Decay(Time.unscaledDeltaTime * 0.0015f);
 
@@ -104,7 +106,11 @@ namespace Apex.Renegade
                 _health.Damaged -= OnDamaged;
                 _health.Died -= OnDied;
             }
-            if (_weapon != null) _weapon.HitConfirmed -= OnHitConfirmed;
+            if (_arsenal != null)
+            {
+                _arsenal.HitConfirmed -= OnHitConfirmed;
+                _arsenal.ShotFired -= OnShotFired;
+            }
         }
     }
 }
