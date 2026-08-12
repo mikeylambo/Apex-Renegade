@@ -1,0 +1,6 @@
+{
+  "name": "Apex.Debug",
+  "rootNamespace": "Apex.Debugging",
+  "references": ["Apex.Core"],
+  "autoReferenced": true
+}
