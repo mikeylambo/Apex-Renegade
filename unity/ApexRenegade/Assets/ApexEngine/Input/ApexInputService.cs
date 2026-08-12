@@ -42,13 +42,13 @@ namespace Apex.Input
             Gameplay = new InputActionMap("Gameplay");
             Asset.AddActionMap(Gameplay);
 
-            Move = Gameplay.AddAction("Move", InputActionType.Value, expectedControlType: "Vector2");
+            Move = Gameplay.AddAction("Move", InputActionType.Value, expectedControlLayout: "Vector2");
             Move.AddCompositeBinding("2DVector")
                 .With("Up", "<Keyboard>/w").With("Down", "<Keyboard>/s")
                 .With("Left", "<Keyboard>/a").With("Right", "<Keyboard>/d");
             Move.AddBinding("<Gamepad>/leftStick");
 
-            Look = Gameplay.AddAction("Look", InputActionType.Value, expectedControlType: "Vector2");
+            Look = Gameplay.AddAction("Look", InputActionType.Value, expectedControlLayout: "Vector2");
             Look.AddBinding("<Mouse>/delta");
             Look.AddBinding("<Gamepad>/rightStick");
 
