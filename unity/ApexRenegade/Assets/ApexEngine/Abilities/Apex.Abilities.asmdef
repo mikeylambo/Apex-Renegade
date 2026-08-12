@@ -1,0 +1,6 @@
+{
+  "name": "Apex.Abilities",
+  "rootNamespace": "Apex.Abilities",
+  "references": ["Apex.Core"],
+  "autoReferenced": true
+}
