@@ -12,6 +12,7 @@ import { LevelManager } from './world/LevelManager.js';
 import { BikeWorldEnhancements } from './world/BikeWorldEnhancements.js';
 import { WorldPerformanceTuner } from './world/WorldPerformanceTuner.js';
 import { VisualPerformanceDirector } from './perf/VisualPerformanceDirector.js';
+import { PerformanceHUD } from './perf/PerformanceHUD.js';
 import { HUD } from './ui/HUD.js';
 import { BikeHUDPrompts } from './ui/BikeHUDPrompts.js';
 import { MenuSystem } from './ui/MenuSystem.js';
@@ -46,7 +47,7 @@ function installRemainingReleaseControls(release, input) {
     <div class="setting-row"><label>Mouse Fire Button</label><input id="release-mouse-fire" type="range" min="0" max="2" step="1"><span class="setting-value" id="release-mouse-fire-value"></span></div>
     <div class="setting-row"><label>Mouse Aim Button</label><input id="release-mouse-aim" type="range" min="0" max="2" step="1"><span class="setting-value" id="release-mouse-aim-value"></span></div>
     <div class="setting-row"><label>Render Frame Cap</label><input id="release-frame-cap" type="range" min="0" max="120" step="30"><span class="setting-value" id="release-frame-cap-value"></span></div>
-    <div class="release-info">Mouse buttons: 0 Left · 1 Middle · 2 Right. Frame cap 0 = uncapped. VSync remains browser-compositor controlled in this web build.</div>`;
+    <div class="release-info">Mouse buttons: 0 Left · 1 Middle · 2 Right. Frame cap 0 = uncapped. F8 toggles live performance diagnostics.</div>`;
   const display = root.querySelector('#release-display')?.closest('.release-section');
   (display || root).appendChild(block);
 
@@ -67,6 +68,14 @@ function installRemainingReleaseControls(release, input) {
   aim.addEventListener('input', () => { mouse.aim = Number(aim.value); if (mouse.aim === mouse.fire) mouse.fire = mouse.aim === 0 ? 2 : 0; saveMouse(); sync(); });
   cap.addEventListener('input', () => { release.setSetting('frameCap', Number(cap.value)); sync(); });
   sync();
+}
+
+function createWarmupOverlay() {
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;inset:0;z-index:55;display:flex;align-items:center;justify-content:center;background:#05080d;color:#dce7f2;font:700 12px/1.5 system-ui,sans-serif;letter-spacing:.28em;text-transform:uppercase;';
+  el.textContent = 'Compiling World // one-time traversal warmup';
+  document.body.appendChild(el);
+  return el;
 }
 
 async function boot() {
@@ -97,7 +106,6 @@ async function boot() {
   const postfx = new PostFX(engine);
 
   installBikeFeelTuning(bike, input);
-  await prewarmBikeMountVisuals(engine, postfx, bike);
 
   bus.on('recoil', ({ pitch, yaw }) => playerCamera.addRecoil(pitch, yaw));
   bus.on('blastModeStart', () => {
@@ -120,6 +128,12 @@ async function boot() {
   let performanceTuner = null;
   let visualPerformance = null;
 
+  const perfHud = new PerformanceHUD(engine, () => ({
+    visualPerformance,
+    postfx,
+    bike
+  }));
+
   engine.onFixedUpdate((fixedDt) => {
     bike.fixedUpdate(fixedDt);
     if (player.vehicleMounted) player.yaw = bike.heading;
@@ -129,8 +143,9 @@ async function boot() {
   engine.onUpdate((dt) => {
     input.update();
     playerCamera.baseFov = Number(input.settings.fov) || 92;
-    const mouseDelta = input.consumeMouseDelta();
-    player.updateLook(mouseDelta);
+    const lookDelta = input.consumeMouseDelta();
+    if (player.vehicleMounted) playerCamera.updateVehicleLook(lookDelta, dt);
+    else player.updateLook(lookDelta);
     bike.update(dt);
     playerCamera.update(dt);
     weaponSystem.update(dt);
@@ -147,6 +162,7 @@ async function boot() {
     visualPerformance?.update(dt);
     postfx.update(dt);
     releaseFoundation?.update(dt);
+    perfHud.update(dt);
   });
 
   new MenuSystem(input, engine, hud, () => {
@@ -163,8 +179,16 @@ async function boot() {
       bike,
       bikeWorld
     });
-    releaseFoundation?.start();
-    engine.start();
+
+    // Previous builds warmed the bike before the world existed, so the first
+    // high-speed render still had to compile the actual world/post materials.
+    // Move that cost into one explicit startup phase instead of the mount action.
+    const warmup = createWarmupOverlay();
+    prewarmBikeMountVisuals(engine, postfx, bike).finally(() => {
+      warmup.remove();
+      releaseFoundation?.start();
+      engine.start();
+    });
   });
 
   releaseFoundation = new ShooterReleaseFoundation({
@@ -181,7 +205,7 @@ async function boot() {
   });
   installRemainingReleaseControls(releaseFoundation, input);
 
-  console.log('%cAPEX — Visual Ceiling IV / Adaptive World Budget / Renegade Bike v0.2', 'color:#9c8cff;font-weight:bold;');
+  console.log('%cAPEX — Cinematic Bike / World Integrity / Visual Ceiling IV', 'color:#9c8cff;font-weight:bold;');
 }
 
 boot().catch((err) => {

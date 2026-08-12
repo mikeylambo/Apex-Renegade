@@ -14,7 +14,7 @@ export class BikeHUDPrompts {
       this._syncPrompt(distance, mounted, recalling);
     });
     bus.on('bikeMounted', () => {
-      this._controlTimer = 5.5;
+      this._controlTimer = 6.5;
       this.controls.classList.add('show');
       this.prompt.classList.remove('show');
     });
@@ -47,7 +47,7 @@ export class BikeHUDPrompts {
     }
 
     this.prompt = document.createElement('div'); this.prompt.id = 'bike-prompt'; document.body.appendChild(this.prompt);
-    this.controls = document.createElement('div'); this.controls.id = 'bike-controls'; this.controls.textContent = 'RT THROTTLE · LT BRAKE · A BOOST · LB DRIFT · RB CORONA · X RELOAD · PULL LS BACK WHEELIE · D-PAD ↓ DISMOUNT'; document.body.appendChild(this.controls);
+    this.controls = document.createElement('div'); this.controls.id = 'bike-controls'; this.controls.textContent = 'RT THROTTLE · LT BRAKE · RS CAMERA · A BOOST · LB DRIFT · RB CORONA · X RELOAD · PULL LS BACK WHEELIE · D-PAD ↓ DISMOUNT'; document.body.appendChild(this.controls);
     this.drive = document.createElement('div'); this.drive.id = 'bike-drive'; this.drive.innerHTML = '<div class="bike-drive-head"><span>Spectral Drive</span><span id="bike-drive-value">100</span></div><div class="bike-drive-track"><div class="bike-drive-fill"></div></div>'; document.body.appendChild(this.drive);
     this.driveFill = this.drive.querySelector('.bike-drive-fill'); this.driveValue = this.drive.querySelector('#bike-drive-value');
     this.flash = document.createElement('div'); this.flash.id = 'bike-flash'; document.body.appendChild(this.flash);
@@ -65,7 +65,10 @@ export class BikeHUDPrompts {
       this.prompt.classList.add('show');
       return;
     }
-    if (distance <= 7.2) {
+    // Keep the tooltip inside the actual 5.8m mount radius. The previous 7.2m
+    // prompt could say MOUNT while the same button actually triggered recall,
+    // making a successful mount feel several seconds late.
+    if (distance <= 5.5) {
       const pad = this.input.getBindingLabel?.('bike') || 'D-PAD DOWN';
       this.prompt.innerHTML = `<b>V / ${pad}</b> // MOUNT RENEGADE BIKE`;
       this.prompt.classList.add('show');

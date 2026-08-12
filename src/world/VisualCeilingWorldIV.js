@@ -61,8 +61,6 @@ export class VisualCeilingWorldIV {
   }
 
   _buildScarFrame() {
-    // One instanced draw gives the Scar a denser industrial skyline without
-    // hundreds of unique facade objects.
     const rng = seeded(0x51CA4);
     const geo = new THREE.BoxGeometry(1, 1, 1);
     const mat = new THREE.MeshStandardMaterial({ color: 0x111820, roughness: .73, metalness: .42 });
@@ -79,15 +77,28 @@ export class VisualCeilingWorldIV {
   }
 
   _buildExpanseHorizon() {
-    const ridgeMatFar = new THREE.MeshStandardMaterial({ color: 0x0b1116, roughness: 1, metalness: 0 });
-    const ridgeMatNear = new THREE.MeshStandardMaterial({ color: 0x182126, roughness: .98, metalness: 0 });
-    const far = new THREE.Mesh(ridgeGeometry(3300, 380, 52, 0xEAA401), ridgeMatFar);
-    far.position.set(0, -8, -3150); far.scale.y = 3.0; far.userData.worldSurface = false; this.expanse.add(far);
-    const near = new THREE.Mesh(ridgeGeometry(2800, 260, 44, 0xEAA402), ridgeMatNear);
-    near.position.set(0, -10, -2760); near.scale.y = 1.55; near.userData.worldSurface = false; this.expanse.add(near);
+    // Horizon geometry must read as distant geography, not a wall placed across a
+    // route the player can physically reach. Run the ridge chains parallel to the
+    // highway and beyond the driveable terrain instead of spanning the road.
+    const ridgeMatFar = new THREE.MeshStandardMaterial({ color: 0x0b1116, roughness: 1, metalness: 0, side: THREE.DoubleSide });
+    const ridgeMatNear = new THREE.MeshStandardMaterial({ color: 0x182126, roughness: .98, metalness: 0, side: THREE.DoubleSide });
 
-    // A restrained kilometer-scale containment relic gives the open landscape a
-    // memorable destination silhouette without filling it with props.
+    for (const side of [-1, 1]) {
+      const near = new THREE.Mesh(ridgeGeometry(2700, 250, 46, side < 0 ? 0xEAA402 : 0xEAA403), ridgeMatNear);
+      near.position.set(side * 1550, -10, -1710);
+      near.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+      near.scale.y = 1.58;
+      near.userData.worldSurface = false;
+      this.expanse.add(near);
+
+      const far = new THREE.Mesh(ridgeGeometry(3900, 420, 58, side < 0 ? 0xEAA401 : 0xEAA404), ridgeMatFar);
+      far.position.set(side * 2250, -20, -1750);
+      far.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+      far.scale.y = 2.7;
+      far.userData.worldSurface = false;
+      this.expanse.add(far);
+    }
+
     const dark = new THREE.MeshStandardMaterial({ color: 0x151b21, roughness: .62, metalness: .68 });
     const glow = new THREE.MeshBasicMaterial({ color: 0x8177f2, transparent: true, opacity: .22, depthWrite: false, blending: THREE.AdditiveBlending });
     const relic = new THREE.Group(); relic.position.set(620, 0, -2460);
@@ -124,8 +135,6 @@ export class VisualCeilingWorldIV {
     far.castShadow = mid.castShadow = false; far.receiveShadow = mid.receiveShadow = false;
     far.userData.worldSurface = mid.userData.worldSurface = false; this.vertical.add(far, mid);
 
-    // Transit lanes: one instanced draw, deliberately slower and larger than the
-    // point-cloud traffic so movement helps sell true city depth.
     const podGeo = new THREE.BoxGeometry(7.5, 1.4, 2.2);
     const podMat = new THREE.MeshStandardMaterial({ color: 0x25313d, emissive: 0x91b4d3, emissiveIntensity: 1.35, roughness: .25, metalness: .78 });
     this.transit = new THREE.InstancedMesh(podGeo, podMat, 18);
