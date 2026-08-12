@@ -8,6 +8,7 @@ namespace Apex.Settings
     [Serializable]
     public sealed class ApexSettingsData
     {
+        [Header("Input")]
         public float mouseSensitivity = 1f;
         public float controllerSensitivityX = 1f;
         public float controllerSensitivityY = 1f;
@@ -18,17 +19,32 @@ namespace Apex.Settings
         public float adsMultiplier = 0.72f;
         public bool invertY;
         public float vibration = 1f;
+
+        [Header("Camera / Comfort")]
         public float fov = 92f;
         public float cameraShake = 0.75f;
         public float headBob = 0.65f;
         public float weaponBob = 0.75f;
         public float screenFx = 0.8f;
+
+        [Header("Audio")]
         public float masterVolume = 1f;
         public float sfxVolume = 1f;
         public float musicVolume = 0.75f;
         public float dialogueVolume = 1f;
+
+        [Header("Accessibility")]
         public bool subtitles = true;
         public bool directionalDamageIndicators = true;
+
+        [Header("Graphics / Performance")]
+        public int qualityPreset = 2;
+        public int targetFrameRate = 60;
+        public bool vSync;
+        public bool fullscreen = true;
+        public float shadowDistance = 140f;
+        public float lodBias = 1.35f;
+        public int antiAliasing = 2;
 
         public void Sanitize()
         {
@@ -50,6 +66,34 @@ namespace Apex.Settings
             sfxVolume = Mathf.Clamp01(sfxVolume);
             musicVolume = Mathf.Clamp01(musicVolume);
             dialogueVolume = Mathf.Clamp01(dialogueVolume);
+            qualityPreset = Mathf.Clamp(qualityPreset, 0, 3);
+            targetFrameRate = ClosestFrameRate(targetFrameRate);
+            shadowDistance = Mathf.Clamp(shadowDistance, 0f, 300f);
+            lodBias = Mathf.Clamp(lodBias, 0.4f, 3f);
+            antiAliasing = ClosestAntiAliasing(antiAliasing);
+        }
+
+        private static int ClosestFrameRate(int value)
+        {
+            var options = new[] { 30, 60, 90, 120, 144 };
+            var best = options[0];
+            var delta = Mathf.Abs(value - best);
+            for (var i = 1; i < options.Length; i++)
+            {
+                var d = Mathf.Abs(value - options[i]);
+                if (d >= delta) continue;
+                delta = d;
+                best = options[i];
+            }
+            return best;
+        }
+
+        private static int ClosestAntiAliasing(int value)
+        {
+            if (value <= 0) return 0;
+            if (value <= 2) return 2;
+            if (value <= 4) return 4;
+            return 8;
         }
     }
 
