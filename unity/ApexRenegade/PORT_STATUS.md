@@ -2,59 +2,100 @@
 
 ## Gate
 
-**Do not merge this port into `main` until the self-hosted Unity editor compiles the project and EditMode tests pass.**
+**First Unity playable gate: GREEN. PR #10 remains draft until human feel/playtest approval.**
 
-Current external blocker: the Windows headless runner's Unity `6000.4.11f1` reports no valid Editor license and exits with code 198 before package import or C# compilation.
+Verified on the self-hosted Windows runner with Unity `6000.4.11f1` under the interactive `Richard` user so the Unity Personal entitlement is visible.
+
+Green pipeline run: `unity-headless-lab` Actions run `31624170847`.
+
+Passed in sequence:
+
+1. headless project import + `Apex.Editor.ApexBatch.CreateAndValidate`
+2. EditMode regression suite
+3. PlayMode runtime smoke suite
+4. Windows x64 development player build
+5. playable artifact upload
+
+The earlier code-198 licensing blocker is resolved for the interactive runner path. Keep `E:\actions-runner\run.cmd` open while using this setup; the Windows service is currently stopped because it runs as `NETWORK SERVICE` and cannot see the Personal entitlement.
 
 ## Apex Engine v0.1
 
 | System | State | Notes |
 |---|---|---|
-| Core/service lifecycle | Foundation | `Apex.Core` registry/runtime lifecycle |
-| Settings | Foundation | persistent JSON; aim, accessibility, audio, FOV, camera comfort |
-| Input | Foundation | Input System actions, deadzones, curves, mouse/controller look, binding override persistence, interactive rebind API |
-| Combat | Foundation | health + shield, damage payloads, weapon state machine |
-| Aim assist | Architecture | target contract + deterministic resolver/scoring; game-specific target acquisition still pending |
-| Traversal | Foundation | FPS motor + Rigidbody bike contract, boost, drift grip, mount/dismount, recall |
-| Interaction | Foundation | scanner + generic prompt/interactable contract |
-| Save/checkpoint | Foundation | JSON slot, checkpoint data, respawn transform contract |
-| World | Foundation | reusable region volumes/tracker; real streaming implementation pending |
-| Encounter | Foundation | data-driven waves + spawn-adapter contract |
-| Debug/testing | Foundation | frame telemetry, batch validation entrypoints, EditMode regression tests |
+| Core/service lifecycle | Working foundation | `Apex.Core` registry/runtime lifecycle + subsystem static reset |
+| Settings | Working foundation | persistent JSON; aim, accessibility, audio, FOV, camera comfort; runtime pause/settings surface |
+| Input | Working foundation | Input System actions, radial deadzones, response curve, acceleration, mouse/controller look, binding override persistence, interactive rebind API, separate vehicle-fire actions |
+| Combat | Working foundation | health + shield, damage payloads, deterministic weapon state machine, reusable `WeaponDefinition` / `ApexWeaponRuntime` |
+| Aim assist | First integration | deterministic resolver/scoring; first Hollow targets registered; assist applied to controller ADS only |
+| Traversal | First integration | FPS motor + Rigidbody bike, boost, drift grip, mount/dismount, remote recall, cinematic right-stick/mouse bike camera |
+| Interaction | Foundation | scanner + generic prompt/interactable contract; pickup/content integrations pending |
+| Save/checkpoint | First integration | JSON slot, valid-checkpoint tracking, Scar/Expanse/Vertical checkpoints, death/respawn transform flow |
+| World | Foundation | reusable region volumes/tracker; production terrain/streaming/LOD still pending |
+| Encounter | Foundation | data-driven wave + spawn-adapter contract; first bootstrap Hollow group is still directly authored in port code |
+| UI | First integration | real pause state, cursor state, settings panel, HUD, ammo/vitals/region/bike status, hit/kill markers, damage/respawn feedback |
+| Debug/testing | Working foundation | telemetry, batch validation, EditMode regressions, PlayMode runtime smoke harness, automated Windows build |
 
 ## First playable Apex-specific bootstrap
 
-Implemented programmatically under `Assets/ApexPort` so the port can be generated/tested headlessly:
+Implemented programmatically under `Assets/ApexPort` so the port can be generated, tested, and built headlessly:
 
 - The Scar → The Expanse → Vertical Megacity world-spine massing
 - physical ground/road/urban primitive colliders
 - Renegade CharacterController baseline movement
+- 100 HP + 55 shield first-pass vitals
+- Corona Blaster on reusable weapon framework
+- 18-round magazine / reserve ammo / cadence / reload state
+- ADS presentation + ADS FOV
+- procedural first-person Corona viewmodel + recoil response
+- reticle, ammo, vitals, reload state, hitmarker, kill confirm
+- directional damage feedback + death/checkpoint/respawn loop
+- six first-pass Hollow targets with pursuit, attack, hit flash, stagger, death feedback
+- controller-only aim-assist target resolver
 - nearby Renegade Bike
 - mount / dismount / remote recall
 - Rigidbody boost + drift-grip prototype
+- bike-mounted Corona on RB while RT remains throttle
 - independent right-stick/mouse motorcycle orbit camera with delayed recenter
 - speed-sensitive chase distance and FOV
-- three named region volumes
+- three named region volumes and physical checkpoints
+- real pause state + first settings screen
 
-This is **not** intended as final art or final vehicle physics. It is the Unity behavior parity scaffold.
+This is **not** final art, AI, gun feel, world production, or vehicle physics. It is the first compiled behavior-parity/AAA-foundation playable.
 
-## Validated in the web prototype, still to port
+## Automated smoke coverage
 
-- Corona/Maw weapon implementations and viewmodel animation
-- ADS presentation, recoil/reticle response, hitmarkers, directional damage UI
-- bike-mounted Corona fire, drift damage, wheelies, launch dismount, spectral VFX/audio
+EditMode currently protects:
+
+- settings sanitization
+- anti-stick-drift shaping / response direction
+- deterministic weapon fire + reload state
+- weapon runtime shot/reload/dry-fire events
+- aim-assist centered-target preference
+
+PlayMode currently protects:
+
+- runtime bootstrap creates Renegade, vitals, Corona, bike, region tracker, Hollow encounter and initial checkpoint
+- Renegade Bike recall measurably closes distance to the player
+
+## Still to port / productionize
+
+- Maw + general weapon loadout/swap framework integration
+- ammo pickups and generic interaction-prompt presentation
+- controller-remapping UI (underlying rebind/persistence API already exists)
+- proper audio service/mix buses and shooter/bike/world audio
+- stronger recoil/camera shake/animation and screen-space game-feel FX
+- full accessibility presentation and controller-native menu navigation
+- bike wheelies, launch dismount, drift damage and stronger suspension/ground model
 - Refusal progression and Pressure/army escalation
-- Hollow / Enforcer / Voss combat behavior
-- pause/settings UI and full accessibility presentation
-- checkpoint/death UI flow
-- authored terrain/streaming/LOD production pipeline
+- Encounter Framework integration for Hollow / Enforcer / Voss and large-scale simulation tiers
+- world streaming, Unity Terrain, authored collision/LOD/GPU-driven production pipeline
 - Scar/Expanse/Vertical production visuals
-- large-scale encounter simulation tiers
+- performance budgets/profiler markers beyond first telemetry
 
 ## Next autonomous passes
 
-1. **Compile gate:** restore runner license; compile/import; fix C#/package issues; run EditMode tests.
-2. **AAA Baseline:** finish Input/Settings/Combat/UI/Save/Interaction/Encounter frameworks and wire them into the playable bootstrap.
-3. **Behavior parity:** Corona + enemies + Pressure/Refusal + full bike combat/traversal.
-4. **Game Feel:** recoil, camera, aim assist, impacts, animation timing, audio, movement/bike curves.
-5. **World production:** Unity-native terrain, scene/Addressables streaming, LOD/GPU-driven rendering, authored environments.
+1. **Human feel gate:** play the first Unity Windows build and record movement, Corona, Hollow, death, recall, boost/drift, camera, mount latency and general frame feel.
+2. **AAA Baseline completion:** audio, interaction/pickups, weapon swapping/Maw, remap UI, controller-native settings, encounter wiring, richer profiling.
+3. **Game Feel:** recoil, camera, aim assist, impacts, animation timing, movement curves, bike suspension/drift/wheelie/recall presentation, audio/VFX.
+4. **Behavior parity + escalation:** Pressure/Refusal, Hollow/Enforcer/Voss, army-scale response, bike combat expansion.
+5. **World production:** Unity-native terrain, region streaming/Addressables, LOD/GPU-driven rendering, authored Scar/Expanse/Vertical environments.
