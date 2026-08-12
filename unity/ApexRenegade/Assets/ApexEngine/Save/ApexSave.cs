@@ -8,6 +8,7 @@ namespace Apex.Save
     [Serializable]
     public sealed class ApexCheckpointData
     {
+        public bool valid;
         public string checkpointId = "start";
         public string regionId = "";
         public Vector3 position;
@@ -29,6 +30,7 @@ namespace Apex.Save
         private const string FileName = "apex-save-0.json";
         private string _path;
         public ApexSaveData Data { get; private set; } = new();
+        public bool HasCheckpoint => Data?.checkpoint != null && Data.checkpoint.valid;
         public event Action<ApexCheckpointData> CheckpointChanged;
 
         public void Initialize(ApexServices services)
@@ -42,6 +44,7 @@ namespace Apex.Save
         {
             Data.checkpoint = new ApexCheckpointData
             {
+                valid = true,
                 checkpointId = string.IsNullOrWhiteSpace(id) ? "checkpoint" : id,
                 regionId = region ?? string.Empty,
                 position = position,
@@ -55,7 +58,7 @@ namespace Apex.Save
 
         public bool TryGetRespawn(out Vector3 position, out Quaternion rotation)
         {
-            if (Data?.checkpoint == null)
+            if (!HasCheckpoint)
             {
                 position = default;
                 rotation = Quaternion.identity;
@@ -84,6 +87,7 @@ namespace Apex.Save
             try
             {
                 Data = File.Exists(_path) ? JsonUtility.FromJson<ApexSaveData>(File.ReadAllText(_path)) ?? new ApexSaveData() : new ApexSaveData();
+                Data.checkpoint ??= new ApexCheckpointData();
             }
             catch (Exception ex)
             {
@@ -109,12 +113,24 @@ namespace Apex.Save
         [SerializeField] private bool activateOnce = true;
         private bool _activated;
 
+        public void Configure(string id, string region, int tier = 0, bool once = true)
+        {
+            checkpointId = id;
+            regionId = region;
+            progressionTier = Mathf.Max(0, tier);
+            activateOnce = once;
+        }
+
         private void OnTriggerEnter(Collider other)
         {
             if (_activated && activateOnce) return;
+            if (!other.TryGetComponent<ApexFirstPersonMarker>(out _) && other.GetComponentInParent<ApexFirstPersonMarker>() == null) return;
             if (!ApexRuntime.IsInitialized || !ApexRuntime.Services.TryGet<ApexSaveService>(out var save)) return;
             save.SetCheckpoint(checkpointId, regionId, transform.position, transform.rotation, progressionTier);
             _activated = true;
         }
     }
+
+    // Small generic marker keeps checkpoint triggers independent of any game-specific player class.
+    public sealed class ApexFirstPersonMarker : MonoBehaviour { }
 }
