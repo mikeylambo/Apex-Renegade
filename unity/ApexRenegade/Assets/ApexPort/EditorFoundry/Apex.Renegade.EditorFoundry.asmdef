@@ -1,0 +1,7 @@
+{
+  "name": "Apex.Renegade.EditorFoundry",
+  "rootNamespace": "Apex.Renegade.EditorFoundry",
+  "references": ["Apex.World"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}
