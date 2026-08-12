@@ -1,3 +1,5 @@
+using Apex.AI;
+using Apex.Camera;
 using Apex.Combat;
 using Apex.Encounter;
 using Apex.Input;
@@ -141,6 +143,46 @@ namespace Apex.Tests
             meter.Decay(0.62f);
             Assert.That(meter.Stage.Id, Is.EqualTo("BASELINE"));
             Assert.That(meter.Value, Is.EqualTo(0.18f).Within(0.001f));
+        }
+
+        [Test]
+        public void AgentTuning_SanitizeProducesSafeCombatEnvelope()
+        {
+            var tuning = new ApexAgentTuning
+            {
+                moveSpeed = -5f,
+                acceleration = 0f,
+                turnSharpness = -2f,
+                attackRange = -1f,
+                preferredRange = 999f,
+                attackInterval = 0f,
+                gravity = -10f
+            };
+            tuning.Sanitize();
+            Assert.That(tuning.moveSpeed, Is.EqualTo(0f));
+            Assert.That(tuning.acceleration, Is.GreaterThan(0f));
+            Assert.That(tuning.attackRange, Is.GreaterThan(0f));
+            Assert.That(tuning.preferredRange, Is.LessThanOrEqualTo(tuning.attackRange));
+            Assert.That(tuning.attackInterval, Is.GreaterThan(0f));
+            Assert.That(tuning.gravity, Is.GreaterThanOrEqualTo(0f));
+        }
+
+        [Test]
+        public void CameraImpulse_RecoilCreatesFiniteRecoverableState()
+        {
+            var impulse = new ApexCameraImpulseState();
+            impulse.Recoil(4f, 0.8f, 0.12f);
+            impulse.Shake(0.2f, 24f);
+            for (var i = 0; i < 12; i++) impulse.Tick(1f / 60f, 1f);
+
+            Assert.That(impulse.Active, Is.True);
+            Assert.That(float.IsFinite(impulse.Position.x), Is.True);
+            Assert.That(float.IsFinite(impulse.RotationEuler.x), Is.True);
+            Assert.That(impulse.Position.sqrMagnitude + impulse.RotationEuler.sqrMagnitude, Is.GreaterThan(0f));
+
+            for (var i = 0; i < 300; i++) impulse.Tick(1f / 60f, 1f);
+            Assert.That(impulse.Position.sqrMagnitude, Is.LessThan(0.005f));
+            Assert.That(impulse.RotationEuler.sqrMagnitude, Is.LessThan(0.05f));
         }
 
         [Test]
