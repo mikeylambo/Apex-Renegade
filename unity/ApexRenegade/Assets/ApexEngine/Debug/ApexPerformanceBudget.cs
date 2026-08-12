@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using Apex.Core;
+using Apex.Settings;
 using UnityEngine;
 
 namespace Apex.Debugging
@@ -15,15 +16,17 @@ namespace Apex.Debugging
     [DefaultExecutionOrder(-810)]
     public sealed class ApexPerformanceBudget : MonoBehaviour, IApexService
     {
-        [SerializeField, Range(30, 240)] private int targetFps = 60;
+        private int _targetFps = 60;
         private float _smoothedMs = 16.67f;
         private float _badSeconds;
         private float _goodSeconds;
         private bool _registered;
+        private ApexSettingsService _settings;
 
         public ApexPerformanceState State { get; private set; } = ApexPerformanceState.Nominal;
         public float SmoothedFrameMs => _smoothedMs;
-        public float TargetFrameMs => 1000f / Mathf.Max(1, targetFps);
+        public int TargetFps => _targetFps;
+        public float TargetFrameMs => 1000f / Mathf.Max(1, _targetFps);
         public event Action<ApexPerformanceState> StateChanged;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -38,7 +41,7 @@ namespace Apex.Debugging
             DontDestroyOnLoad(gameObject);
             for (var i = 0; i < 120; i++)
             {
-                if (ApexRuntime.IsInitialized)
+                if (ApexRuntime.IsInitialized && ApexRuntime.Services.TryGet<ApexSettingsService>(out _settings))
                 {
                     Initialize(ApexRuntime.Services);
                     yield break;
@@ -50,8 +53,28 @@ namespace Apex.Debugging
         public void Initialize(ApexServices services)
         {
             if (_registered) return;
+            if (_settings == null) services.TryGet<ApexSettingsService>(out _settings);
+            if (_settings != null)
+            {
+                _targetFps = Mathf.Max(30, _settings.Data.targetFrameRate);
+                _smoothedMs = 1000f / _targetFps;
+                _settings.Changed += OnSettingsChanged;
+            }
             services.Register(this);
             _registered = true;
+        }
+
+        private void OnSettingsChanged(ApexSettingsData settings)
+        {
+            _targetFps = Mathf.Max(30, settings.targetFrameRate);
+            _badSeconds = 0f;
+            _goodSeconds = 0f;
+            if (State != ApexPerformanceState.Nominal)
+            {
+                State = ApexPerformanceState.Nominal;
+                StateChanged?.Invoke(State);
+                Broadcast(State);
+            }
         }
 
         private void Update()
@@ -99,6 +122,10 @@ namespace Apex.Debugging
                     consumer.OnPerformanceStateChanged(state);
         }
 
-        public void Shutdown() => _registered = false;
+        public void Shutdown()
+        {
+            if (_settings != null) _settings.Changed -= OnSettingsChanged;
+            _registered = false;
+        }
     }
 }
