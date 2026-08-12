@@ -65,27 +65,27 @@ export class PlayerCamera {
     const air = Math.min(1, (Number(telemetry.airTime) || 0) / 1.2);
     const wheelie = THREE.MathUtils.clamp(Number(telemetry.wheelie) || 0, 0, 1);
 
-    const backDistance = 6.6 + speed01 * 3.8 + boost * 1.4 + wheelie * .75;
+    const backDistance = 6.6 + speed01 * 3.8 + boost * 1.4 + wheelie * 1.8;
     const sideOffset = .18 - drift * steer * 1.15;
-    const height = 3.05 + speed01 * .32 + air * .70 + wheelie * .18;
+    const height = 3.05 + speed01 * .32 + air * .70 + wheelie * .30;
     const desired = pos.clone()
       .addScaledVector(forward, -backDistance)
       .addScaledVector(right, sideOffset)
       .add(new THREE.Vector3(0, height, 0));
 
     if (this._vehicleCameraPos.lengthSq() < .01) this._vehicleCameraPos.copy(desired);
-    const follow = boost > .2 ? .00055 : drift > .25 ? .0012 : .000035;
+    const follow = boost > .2 ? .00055 : drift > .25 ? .0012 : wheelie > .15 ? .0006 : .000035;
     this._vehicleCameraPos.lerp(desired, 1 - Math.pow(follow, dt));
     this.camera.position.copy(this._vehicleCameraPos);
 
     const target = pos.clone()
-      .addScaledVector(forward, 9.5 + speed01 * 8.5)
+      .addScaledVector(forward, 9.5 + speed01 * 8.5 - wheelie * 2.0)
       .addScaledVector(right, drift * steer * .55)
-      .add(new THREE.Vector3(0, 1.15 - c.pitch * 5.2 + air * .35 + wheelie * .42, 0));
+      .add(new THREE.Vector3(0, 1.15 - c.pitch * 5.2 + air * .35 + wheelie * .12, 0));
     this.camera.lookAt(target);
     this.camera.rotation.z += -drift * steer * .035;
 
-    const desiredFov = 86 + speed01 * 16 + boost * 8;
+    const desiredFov = 86 + speed01 * 16 + boost * 8 - wheelie * 1.8;
     this.camera.fov = THREE.MathUtils.damp(this.camera.fov, desiredFov, boost > .2 ? 8 : 6, dt);
     this.camera.updateProjectionMatrix();
     this.targetFov = this.baseFov;

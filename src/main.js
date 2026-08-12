@@ -11,6 +11,7 @@ import { installBikeFeelTuning, prewarmBikeMountVisuals } from './player/BikeFee
 import { LevelManager } from './world/LevelManager.js';
 import { BikeWorldEnhancements } from './world/BikeWorldEnhancements.js';
 import { WorldPerformanceTuner } from './world/WorldPerformanceTuner.js';
+import { VisualPerformanceDirector } from './perf/VisualPerformanceDirector.js';
 import { HUD } from './ui/HUD.js';
 import { BikeHUDPrompts } from './ui/BikeHUDPrompts.js';
 import { MenuSystem } from './ui/MenuSystem.js';
@@ -117,6 +118,7 @@ async function boot() {
   let releaseFoundation = null;
   let bikeWorld = null;
   let performanceTuner = null;
+  let visualPerformance = null;
 
   engine.onFixedUpdate((fixedDt) => {
     bike.fixedUpdate(fixedDt);
@@ -142,6 +144,7 @@ async function boot() {
     hud.update(dt, player, input);
     bikeHud.update(dt);
     performanceTuner?.update(dt);
+    visualPerformance?.update(dt);
     postfx.update(dt);
     releaseFoundation?.update(dt);
   });
@@ -154,6 +157,12 @@ async function boot() {
     bikeWorld.build();
     performanceTuner = new WorldPerformanceTuner(engine, player);
     performanceTuner.capture();
+    visualPerformance = new VisualPerformanceDirector({
+      postfx,
+      tuner: performanceTuner,
+      bike,
+      bikeWorld
+    });
     releaseFoundation?.start();
     engine.start();
   });
@@ -172,7 +181,7 @@ async function boot() {
   });
   installRemainingReleaseControls(releaseFoundation, input);
 
-  console.log('%cAPEX — Visual Ceiling III / Renegade Bike v0.2 / Shooter Release Foundation v0.3', 'color:#9c8cff;font-weight:bold;');
+  console.log('%cAPEX — Visual Ceiling IV / Adaptive World Budget / Renegade Bike v0.2', 'color:#9c8cff;font-weight:bold;');
 }
 
 boot().catch((err) => {
