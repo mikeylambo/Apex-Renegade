@@ -1,0 +1,7 @@
+{
+  "name": "Apex.Engine.Editor",
+  "rootNamespace": "Apex.EditorTools",
+  "references": ["Apex.Core", "Apex.World", "Apex.Debug"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}
