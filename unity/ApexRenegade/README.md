@@ -4,10 +4,10 @@ This Unity project is the production port of the browser prototype. The web runt
 
 ## Editor target
 
-- Unity 6.3 LTS
-- Project currently pins `6000.3.12f1`; opening in a newer 6.3 LTS patch is expected to upgrade ProjectVersion metadata.
+- Headless lab editor: Unity `6000.4.11f1`
 - Input System 1.17
 - Cinemachine 3.1
+- We can reassess an LTS production pin later; the first port milestone deliberately targets the editor already installed on the verified Windows headless runner.
 
 ## Architecture: Apex Engine v0.1
 
@@ -25,17 +25,24 @@ This Unity project is the production port of the browser prototype. The web runt
 
 ## Headless entrypoints
 
-Once a Unity executable is available in the environment:
+Verified runner executable:
 
-```bash
-Unity -batchmode -nographics -quit -projectPath unity/ApexRenegade \
-  -executeMethod Apex.Editor.ApexBatch.ValidateProject \
-  -logFile -
+`E:\6000.4.11f1\Editor\Unity.exe`
 
-Unity -batchmode -nographics -quit -projectPath unity/ApexRenegade \
-  -runTests -testPlatform EditMode \
-  -testResults unity/ApexRenegade/TestResults/editmode.xml \
-  -logFile -
+Typical validation:
+
+```powershell
+& $env:UNITY_EXE -batchmode -nographics -quit `
+  -projectPath <repo>\unity\ApexRenegade `
+  -accept-apiupdate `
+  -executeMethod Apex.Editor.ApexBatch.CreateAndValidate `
+  -logFile Logs\apex-compile.log
+
+& $env:UNITY_EXE -batchmode -nographics -quit `
+  -projectPath <repo>\unity\ApexRenegade `
+  -runTests -testPlatform EditMode `
+  -testResults TestResults\editmode.xml `
+  -logFile Logs\apex-tests.log
 ```
 
 `ApexBatch.CreatePortScene` creates/recreates the first generated port scene and installs it into EditorBuildSettings.
