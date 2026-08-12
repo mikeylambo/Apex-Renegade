@@ -13,6 +13,7 @@ export class Engine {
     this.renderCallbacks = [];
     this.paused = true;
     this.visualWarnings = [];
+    this.perf = { frameMs: 0, fixedMs: 0, updateMs: 0, renderMs: 0, fixedSteps: 0 };
     this._initSceneShell();
   }
 
@@ -76,16 +77,35 @@ export class Engine {
   start() { this.paused = false; this.clock.start(); this.renderer.setAnimationLoop(() => this._tick()); }
   stop() { this.paused = true; }
   _tick() {
+    const frameStart = performance.now();
     const dt = Math.min(this.clock.getDelta(), 0.1);
     if (this.paused) return;
     this.accumulator += dt;
+
+    const fixedStart = performance.now();
+    let fixedSteps = 0;
     while (this.accumulator >= this.fixedStep) {
       for (const cb of this.fixedUpdateCallbacks) cb(this.fixedStep);
-      this.world.step(); this.accumulator -= this.fixedStep;
+      this.world.step();
+      this.accumulator -= this.fixedStep;
+      fixedSteps++;
     }
+    const fixedEnd = performance.now();
+
     const alpha = this.accumulator / this.fixedStep;
+    const updateStart = fixedEnd;
     for (const cb of this.updateCallbacks) cb(dt, alpha);
+    const updateEnd = performance.now();
+
+    const renderStart = updateEnd;
     if (this.renderFn) this.renderFn(dt, alpha); else this.renderer.render(this.scene, this.camera);
+    const renderEnd = performance.now();
     for (const cb of this.renderCallbacks) cb(dt, alpha);
+
+    this.perf.frameMs = renderEnd - frameStart;
+    this.perf.fixedMs = fixedEnd - fixedStart;
+    this.perf.updateMs = updateEnd - updateStart;
+    this.perf.renderMs = renderEnd - renderStart;
+    this.perf.fixedSteps = fixedSteps;
   }
 }
