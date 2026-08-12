@@ -1,0 +1,7 @@
+{
+  "name": "Apex.GameplayFoundry.Editor",
+  "rootNamespace": "Apex.GameplayFoundry",
+  "references": ["Apex.Combat", "Apex.Encounter", "Apex.Abilities"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}
