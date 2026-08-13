@@ -6,6 +6,7 @@ using Apex.Core;
 using Apex.Save;
 using Apex.Traversal;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace Apex.Renegade
 {
