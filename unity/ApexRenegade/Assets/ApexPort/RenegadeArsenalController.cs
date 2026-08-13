@@ -169,8 +169,10 @@ namespace Apex.Renegade
             // Weapon runtime events are connected lazily because Configure owns the definitions.
         }
 
-        private void FireShot(ApexWeaponRuntime weapon)
+        private void FireShot(WeaponShot _)
         {
+            var weapon = _bike != null && _bike.IsMounted ? _corona : _loadout?.Active;
+            if (weapon == null) return;
             var d = weapon.Definition;
             var origin = _camera.transform.position;
             var baseForward = _camera.transform.forward;
