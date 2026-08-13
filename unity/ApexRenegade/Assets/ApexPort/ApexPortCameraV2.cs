@@ -1,4 +1,4 @@
-using Apex.Camera;
+using Apex.CameraSystem;
 using Apex.Combat;
 using Apex.Input;
 using Apex.Settings;
