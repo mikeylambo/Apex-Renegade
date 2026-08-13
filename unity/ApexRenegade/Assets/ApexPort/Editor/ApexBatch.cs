@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using Apex.AI;
 using Apex.Audio;
-using Apex.Camera;
+using Apex.CameraSystem;
 using Apex.Combat;
 using Apex.Core;
 using Apex.Debugging;
@@ -150,7 +150,6 @@ namespace Apex.Editor
                     var ridge = Mathf.Pow(Mathf.Abs(Mathf.Sin(worldX * 0.0042f + worldZ * 0.0017f)), 3f) * 0.11f;
                     var basin = Mathf.Sin((zn - 0.5f) * Mathf.PI) * 0.018f;
                     var normalizedHeight = outsideRoad * Mathf.Max(0f, edge * 0.34f + macro + ridge + basin);
-                    // Keep the authored driving corridor mathematically flat and collider-safe.
                     if (roadDistance <= 42f) normalizedHeight = 0f;
                     heights[z, x] = Mathf.Clamp01(normalizedHeight);
                 }
