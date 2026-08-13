@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Apex.Camera
+namespace Apex.CameraSystem
 {
     public sealed class ApexCameraImpulseState
     {
