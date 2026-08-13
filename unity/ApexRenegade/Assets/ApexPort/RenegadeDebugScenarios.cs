@@ -10,6 +10,7 @@ using Apex.Save;
 using Apex.Traversal;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Object = UnityEngine.Object;
 
 namespace Apex.Renegade
 {
