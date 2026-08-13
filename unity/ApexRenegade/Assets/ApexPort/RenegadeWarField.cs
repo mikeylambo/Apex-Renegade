@@ -4,6 +4,7 @@ using Apex.Encounter;
 using Apex.Traversal;
 using UnityEngine;
 using UnityEngine.Rendering;
+using Graphics = UnityEngine.Graphics;
 
 namespace Apex.Renegade
 {
