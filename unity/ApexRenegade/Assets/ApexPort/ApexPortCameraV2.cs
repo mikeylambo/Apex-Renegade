@@ -88,9 +88,9 @@ namespace Apex.Renegade
             {
                 var view = _player.View;
                 if (view == null) return;
-                var baseRotation = view.rotation;
-                transform.position = view.position + baseRotation * _impulse.Position;
-                transform.rotation = baseRotation * Quaternion.Euler(_impulse.RotationEuler);
+                var viewRotation = view.rotation;
+                transform.position = view.position + viewRotation * _impulse.Position;
+                transform.rotation = viewRotation * Quaternion.Euler(_impulse.RotationEuler);
                 _orbitYaw = 0f;
                 _orbitPitch = 9f;
                 _roll = 0f;
