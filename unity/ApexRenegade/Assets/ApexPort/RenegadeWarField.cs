@@ -4,7 +4,6 @@ using Apex.Encounter;
 using Apex.Traversal;
 using UnityEngine;
 using UnityEngine.Rendering;
-using Graphics = UnityEngine.Graphics;
 
 namespace Apex.Renegade
 {
@@ -107,9 +106,9 @@ namespace Apex.Renegade
         {
             if (_mesh == null || Application.isBatchMode) return;
             if (_lightCount > 0)
-                Graphics.DrawMeshInstanced(_mesh, 0, _lightMaterial, _lightMatrices, _lightCount, null, ShadowCastingMode.Off, false, 0, null, LightProbeUsage.Off);
+                UnityEngine.Graphics.DrawMeshInstanced(_mesh, 0, _lightMaterial, _lightMatrices, _lightCount, null, ShadowCastingMode.Off, false, 0, null, LightProbeUsage.Off);
             if (_distantCount > 0)
-                Graphics.DrawMeshInstanced(_mesh, 0, _distantMaterial, _distantMatrices, _distantCount, null, ShadowCastingMode.Off, false, 0, null, LightProbeUsage.Off);
+                UnityEngine.Graphics.DrawMeshInstanced(_mesh, 0, _distantMaterial, _distantMatrices, _distantCount, null, ShadowCastingMode.Off, false, 0, null, LightProbeUsage.Off);
         }
 
         private void RebuildMatrices(Vector3 anchor)
