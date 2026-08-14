@@ -1,0 +1,6 @@
+{
+  "name": "Apex.Graphics",
+  "rootNamespace": "Apex.Graphics",
+  "references": ["Apex.Core", "Apex.Settings", "Apex.Debug"],
+  "autoReferenced": true
+}

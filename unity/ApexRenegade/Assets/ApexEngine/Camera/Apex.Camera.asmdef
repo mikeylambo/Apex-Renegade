@@ -1,0 +1,6 @@
+{
+  "name": "Apex.Camera",
+  "rootNamespace": "Apex.Camera",
+  "references": ["Apex.Core", "Apex.Settings"],
+  "autoReferenced": true
+}

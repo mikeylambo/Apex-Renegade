@@ -1,0 +1,6 @@
+{
+  "name": "Apex.UI",
+  "rootNamespace": "Apex.UI",
+  "references": ["Apex.Core", "Apex.Settings"],
+  "autoReferenced": true
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Apex.AI",
+  "rootNamespace": "Apex.AI",
+  "references": ["Apex.Core", "Apex.Combat"],
+  "autoReferenced": true
+}

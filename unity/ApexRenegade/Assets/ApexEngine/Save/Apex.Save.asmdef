@@ -1,0 +1,6 @@
+{
+  "name": "Apex.Save",
+  "rootNamespace": "Apex.Save",
+  "references": ["Apex.Core", "Apex.Settings"],
+  "autoReferenced": true
+}

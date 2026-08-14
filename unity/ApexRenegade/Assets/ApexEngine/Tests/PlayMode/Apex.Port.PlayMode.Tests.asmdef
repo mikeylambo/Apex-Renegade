@@ -1,0 +1,7 @@
+{
+  "name": "Apex.Port.PlayMode.Tests",
+  "rootNamespace": "Apex.Tests.PlayMode",
+  "references": ["Apex.Port", "Apex.Core", "Apex.Input", "Apex.Combat", "Apex.Traversal", "Apex.World", "Apex.Save", "Apex.UI", "Apex.Audio", "Apex.Interaction", "Apex.Encounter", "Unity.InputSystem"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "autoReferenced": false
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Apex.Audio",
+  "rootNamespace": "Apex.Audio",
+  "references": ["Apex.Core", "Apex.Settings"],
+  "autoReferenced": true
+}

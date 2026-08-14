@@ -1,0 +1,6 @@
+{
+  "name": "Apex.Encounter",
+  "rootNamespace": "Apex.Encounter",
+  "references": ["Apex.Core", "Apex.Combat", "Apex.World"],
+  "autoReferenced": true
+}
